@@ -4,7 +4,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 #[derive(Debug, PartialEq)]
 #[repr(u8)]
 pub enum Opcode {
-  Load,
+  Load(LoadWidth),
   LoadFp,
   Custom0,
   MiscMem,
@@ -12,7 +12,7 @@ pub enum Opcode {
   AuiPc,
   OpImm32,
 
-  Store,
+  Store(StoreWidth),
   StoreFp,
   Custom1,
   Amo,
@@ -28,7 +28,7 @@ pub enum Opcode {
   Reserved0,
   Custom2,
 
-  Branch,
+  Branch(BranchOperation),
   JAlr,
   Reserved1,
   JAl,
@@ -151,11 +151,87 @@ impl SystemFunction {
 
 
 #[derive(Debug, PartialEq)]
+pub enum BranchOperation {
+  Equal,
+  NotEqual,
+  LessThan,
+  GreaterOrEqual,
+  LessThanUnsigned,
+  GreaterOrEqualUnsigned
+}
+
+impl BranchOperation {
+  pub fn from_func3(func3: u8) -> Self {
+    match func3 {
+      0b000 => BranchOperation::Equal,
+      0b001 => BranchOperation::NotEqual,
+      0b100 => BranchOperation::LessThan,
+      0b101 => BranchOperation::GreaterOrEqual,
+      0b110 => BranchOperation::LessThanUnsigned,
+      0b111 => BranchOperation::GreaterOrEqualUnsigned,
+
+      _ => unimplemented!()
+    }
+  }
+}
+
+
+#[derive(Debug, PartialEq)]
+pub enum LoadWidth {
+  Byte,
+  HalfWord,
+  Word,
+  DoubleWord,
+  ByteUnsigned,
+  HalfWordUnsigned
+}
+
+impl LoadWidth {
+  pub fn from_func3(func3: u8) -> Self {
+    match func3 {
+      0b000 => LoadWidth::Byte,
+      0b001 => LoadWidth::HalfWord,
+      0b010 => LoadWidth::Word,
+      0b011 => LoadWidth::DoubleWord,
+      0b100 => LoadWidth::ByteUnsigned,
+      0b101 => LoadWidth::HalfWordUnsigned,
+
+      _ => unimplemented!("Load width {:03b}", func3)
+    }
+  }
+}
+
+
+#[derive(Debug, PartialEq)]
+pub enum StoreWidth {
+  Byte,
+  HalfWord,
+  Word,
+  DoubleWord,
+}
+
+impl StoreWidth {
+  pub fn from_func3(func3: u8) -> Self {
+    match func3 {
+      0b000 => Self::Byte,
+      0b001 => Self::HalfWord,
+      0b010 => Self::Word,
+      0b011 => Self::DoubleWord,
+
+      _ => unimplemented!("Store width {:03b}", func3)
+    }
+  }
+}
+
+
+#[derive(Debug, PartialEq)]
 pub enum Instruction {
   R { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, rs2: Register, funct7: u8 },
-  I { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: u16 },
-  S { opcode: Opcode,               /*func3: u8,*/ rs1: Register, imm: u16 },
-  U { opcode: Opcode, rd: Register,                               imm: u32 },
+  I { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: i32 },
+  S { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
+  B { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
+  U { opcode: Opcode, rd: Register,                               imm: i32 },
+  J { opcode: Opcode, rd: Register,                               imm: i32 }
 }
 
 impl Instruction {
@@ -163,7 +239,7 @@ impl Instruction {
   fn opcode(base: u16, func3: u8, imm11_0: u16) -> Opcode {
     let opcode = base & 0b1111111;
     match opcode {
-      0b0000011 => Opcode::Load,
+      0b0000011 => Opcode::Load(LoadWidth::from_func3(func3)),
       0b0000111 => Opcode::LoadFp,
       0b0001011 => Opcode::Custom0,
       0b0001111 => Opcode::MiscMem,
@@ -171,7 +247,7 @@ impl Instruction {
       0b0010111 => Opcode::AuiPc,
       0b0011011 => Opcode::OpImm32,
 
-      0b0100011 => Opcode::Store,
+      0b0100011 => Opcode::Store(StoreWidth::from_func3(func3)),
       0b0100111 => Opcode::StoreFp,
       0b0101011 => Opcode::Custom1,
       0b0101111 => Opcode::Amo,
@@ -187,7 +263,7 @@ impl Instruction {
       0b1010111 => Opcode::Reserved0,
       0b1011011 => Opcode::Custom2,
 
-      0b1100011 => Opcode::Branch,
+      0b1100011 => Opcode::Branch(BranchOperation::from_func3(func3)),
       0b1100111 => Opcode::JAlr,
       0b1101011 => Opcode::Reserved1,
       0b1101111 => Opcode::JAl,
@@ -201,31 +277,103 @@ impl Instruction {
 
 
   pub fn from_32bits(encoded: u32) -> Instruction {
-    let func3: u8     = ((encoded >> 12) as u8)  & 0b111;
-    let rd: u8        = ((encoded >> 7) as u8)   & 0b11111;
-    let imm11_0: u16  = ((encoded >> 20) as u16) & 0b11111111111;
-    let opcode = Instruction::opcode(encoded as u16, func3, imm11_0);
+    println!("Enco'd: {:032b}", encoded);
+    let func3    = (encoded >> 12) & 0b111;
+    let rd       = (encoded >> 7) & 0b11111;
+    let rs1      = (encoded >> 15) & 0b11111;
+    let rs2      = (encoded >> 20) & 0b11111;
+    let imm11_0  = (encoded >> 20) & 0b111111111111;
+    let sign_bit = (encoded >> 31) & 0b1;
+    let opcode = Instruction::opcode(
+      encoded as u16, 
+      func3 as u8,
+      imm11_0 as u16);
+
+    let from_i_type = |opcode| {
+      let imm: u32 = (if sign_bit > 0 { 0b11111111111111111111 << 12 } else { 0 })
+                   | imm11_0;
+
+      Instruction::I { 
+        opcode, 
+        rd: Register::from_u8(rd as u8), 
+        imm: imm as i32, 
+        rs1: Register::from_u8(rs1 as u8) }
+    };
+
+    let from_s_type = |opcode| {
+      let imm11_5 = (encoded >> 25) & 0b1111111;
+      let imm4_0 = (encoded >> 7) & 0b11111;
+      let imm = (imm11_5 << 5) | imm4_0;
+
+      Instruction::S { 
+        opcode, 
+        rs2: Register::from_u8(rs2 as u8),
+        rs1: Register::from_u8(rs1 as u8), 
+        imm: imm as i32}
+    };
+
+    let from_b_type = |opcode| {
+
+      // let encoded = 0b00000000000000000000111100000000u32;
+      let imm12   = (encoded >> 31) & 0b1;
+      let imm10_5 = (encoded >> 25) & 0b111111;
+      let imm4_1  = (encoded >> 8) & 0b1111;
+      let imm11   = (encoded >> 7) & 0b1;
+
+      let imm = (if sign_bit > 0 { 0b11111111111111111111 << 12 } else { 0 })
+                   | (imm12 << 12)
+                   | (imm11 << 11)
+                   | (imm10_5 << 5)
+                   | (imm4_1 << 1);
+
+      Instruction::B {
+        opcode, 
+        rs1: Register::from_u8(rs1 as u8),
+        rs2: Register::from_u8(rs2 as u8), 
+        imm: imm as i32
+      }
+    };
 
     let from_u_type = |opcode| {
       let imm31_12: u32 = encoded >> 12;
-      Instruction::U { opcode, rd: Register::from_u8(rd), imm: imm31_12 }
+      let imm = imm31_12 << 12;
+
+      Instruction::U {
+        opcode, 
+        rd: Register::from_u8(rd as u8), 
+        imm: imm as i32 
+      }
     };
 
-    let from_i_type = |opcode| {
-      let rs1: u8       = ((encoded >> 15) as u8)  & 0b11111;
-      Instruction::I { opcode, rd: Register::from_u8(rd), imm: imm11_0, rs1: Register::from_u8(rs1) }
-    };
+    let from_j_type = |opcode| {
+      let imm10_1  = (encoded >> 22) & 0b1111111111;
+      let imm11    = (encoded >> 20) & 0b1;
+      let imm19_12 = (encoded >> 12) & 0b11111111;
+      
+      let imm = (if sign_bit > 0 { 0b11111111111 << 20 } else { 0 })
+                   | (imm19_12 << 12)
+                   | (imm11 << 11)
+                   | (imm10_1 << 1);
 
-    // let imm4_0: u8    = ((encoded >> 7) as u8)   & 0b11111;
-    // let rs2: u8       = ((encoded >> 20) as u8)  & 0b1111;
-    // let func7: u8     = ((encoded >> 25) as u8)  & 0b1111111;
+      Instruction::J {
+        opcode,
+        rd: Register::from_u8(rd as u8),
+        imm: imm as i32
+      }
+    };
 
     let instruction = match opcode {
-      Opcode::Lui | 
+      Opcode::Lui   => from_u_type(opcode),
       Opcode::AuiPc => from_u_type(opcode),
-      Opcode::OpImm(_) | Opcode::System(_) => from_i_type(opcode),
+      Opcode::JAl   => from_j_type(opcode),
+      Opcode::JAlr  => from_i_type(opcode),
+      Opcode::Branch(_) => from_b_type(opcode),
+      Opcode::Load(_) => from_i_type(opcode),
+      Opcode::Store(_) => from_s_type(opcode),
+      Opcode::OpImm(_) => from_i_type(opcode),
+      Opcode::System(_) => from_i_type(opcode),
 
-      _ => unimplemented!()
+      _ => unimplemented!("opcode {:?}", opcode)
     };
 
     println!("Instruction: {:?}", instruction);
@@ -325,22 +473,121 @@ pub fn test_stream_decoding() {
 
 #[test]
 pub fn test_instruction_decoding() {
+
+  fn decode_test(bytes: &[u8], expected: Instruction) {
+    let mut stream = InstructionStream::new(bytes);
+    let actual = stream.next().unwrap();
+    assert_eq!(actual, expected);
+  }
+/*
   let input = [
-    183, 2, 1, 0, 
-    147, 130, 2, 24, 
-    147, 129, 2, 0, 
-    19, 5, 0, 0, 
-    147, 8, 96, 13, 
-    115, 0, 0, 0, 19, 5, 117, 0, 147, 2, 128, 0, 179, 114, 85, 2, 51, 5, 85, 64, 147, 8, 96, 13, 115, 0, 0, 0, 35, 188, 161, 254, 19, 5, 0, 0, 147, 2, 129, 0, 19, 1, 129, 255, 35, 48, 81, 0, 239, 0, 64, 15, 19, 1, 129, 255, 35, 48, 161, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 208, 5, 115, 0, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 240, 3, 115, 0, 0, 0, 103, 128, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 0, 4, 115, 0, 0, 0, 103, 128, 0, 0, 131, 54, 1, 0, 19, 1, 129, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 19, 5, 192, 249, 147, 8, 128, 3, 115, 0, 0, 0, 103, 128, 0, 0, 131, 50, 1, 0, 19, 1, 129, 0, 147, 130, 114, 0, 19, 3, 128, 0, 51, 243, 98, 2, 179, 130, 98, 64, 3, 179, 129, 255, 51, 5, 83, 0, 147, 8, 96, 13, 115, 0, 0, 0, 99, 4, 101, 0, 99, 8, 0, 0, 99, 6, 80, 0, 19, 5, 0, 0, 99, 6, 0, 0, 35, 188, 161, 254, 19, 5, 3, 0, 103, 128, 0, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 16, 25, 115, 0, 0, 0, 19, 5, 8, 0, 103, 128, 0, 0, 19, 1, 129, 255, 35, 48, 17, 0, 19, 1, 129, 255, 35, 48, 129, 0, 19, 4, 1, 0, 147, 2, 112, 3, 19, 3, 160, 2, 179, 130, 98, 0, 19, 133, 2, 0, 111, 0, 64, 0, 19, 1, 4, 0, 3, 52, 1, 0, 19, 1, 129, 0, 131, 48, 1, 0, 19, 1, 129, 1, 103, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    183, 2, 1, 0,     // lui t0,0x10
+    147, 130, 2, 24,  // addi t0,t0,384
+    147, 129, 2, 0,   // addi gp,t0,0
+    19, 5, 0, 0,      // addi a0,zero,0
+    147, 8, 96, 13,   // addi a7,zero,214
+    115, 0, 0, 0,     // ecall
+    19, 5, 117, 0,    // addi a0,a0,7
+    147, 2, 128, 0,   // addi t0,zero,8
+    179, 114, 85, 2,  // remu t0,a0,t0
+    51, 5, 85, 64,    // sub a0,a0,t0
+    147, 8, 96, 13,   // addi a7,zero,214
+    115, 0, 0, 0,     // ecall
+    35, 188, 161, 254,// sd a0,-8(gp)
+    19, 5, 0, 0,      // addi a0,zero,0
+    147, 2, 129, 0,   // addi t0,sp,8
+    19, 1, 129, 255,  // addi sp,sp,-8
+    35, 48, 81, 0,    // sd t0,0(sp)
+    239, 0, 64, 15,   // jal ra,61       
+    19, 1, 129, 255,  // addi sp,sp,-8        
+    35, 48, 161, 0,   // sd a0,0(sp)       
+    3, 53, 1, 0,      // ld a0,0(sp)    
+    19, 1, 129, 0,    // addi sp,sp,8      
+    147, 8, 208, 5,   // addi a7,zero,93       
+    115, 0, 0, 0,     // ecall     
+    3, 54, 1, 0,      // ld a2,0(sp)    
+    19, 1, 129, 0,    // addi sp,sp,8      
+    131, 53, 1, 0,    // ld a1,0(sp)      
+    19, 1, 129, 0,    // addi sp,sp,8
+    3, 53, 1, 0,      // ld a0,0(sp)
+    19, 1, 129, 0,    // addi sp,sp,8
+    147, 8, 240, 3,   // addi a7,zero,63
+    115, 0, 0, 0,     // ecall
+    103, 128, 0, 0,   // jalr zero,0(ra)
+    3, 54, 1, 0,      // ld a2,0(sp)
+    19, 1, 129, 0,    // addi sp,sp,8
+    131, 53, 1, 0,    // ld a1,0(sp)
+    19, 1, 129, 0,    // addi sp,sp,8
+    3, 53, 1, 0,      // ld a0,0(sp)    
+    19, 1, 129, 0,    // addi sp,sp,8      
+    147, 8, 0, 4,     // addi a7,zero,64     
+    115, 0, 0, 0,     // ecall     
+    103, 128, 0, 0,   // jalr zero,0(ra)       
+    131, 54, 1, 0,    // ld a3,0(sp)      
+    19, 1, 129, 0,    // addi sp,sp,8      
+    3, 54, 1, 0,      // ld a2,0(sp)    
+    19, 1, 129, 0,    // addi sp,sp,8      
+    131, 53, 1, 0,    // ld a1,0(sp)      
+    19, 1, 129, 0,    // addi sp,sp,8      
+    19, 5, 192, 249,  // addi a0,zero,-100        
+    147, 8, 128, 3,   // addi a7,zero,56       
+    115, 0, 0, 0,     // ecall     
+    103, 128, 0, 0,   // jalr zero,0(ra)       
+    131, 50, 1, 0,    // ld t0,0(sp)      
+    19, 1, 129, 0,    // addi sp,sp,8      
+    147, 130, 114, 0, // addi t0,t0,7         
+    19, 3, 128, 0,    // addi t1,zero,8      
+    51, 243, 98, 2,   // remu t1,t0,t1       
+    179, 130, 98, 64, // sub t0,t0,t1         
+    3, 179, 129, 255, // ld t1,-8(gp)         
+    51, 5, 83, 0,     // add a0,t1,t0     
+    147, 8, 96, 13,   // addi a7,zero,214       
+    115, 0, 0, 0,     // ecall     
+    99, 4, 101, 0,    // beq a0,t1,2
+    99, 8, 0, 0,      // beq zero,zero,4    
+    99, 6, 80, 0,     // beq zero,t0,3     
+    19, 5, 0, 0,      // addi a0,zero,0    
+    99, 6, 0, 0,      // beq zero,zero,3    
+    35, 188, 161, 254,// sd a0,-8(gp)          
+    19, 5, 3, 0,      // addi a0,t1,0    
+    103, 128, 0, 0,   // jalr zero,0(ra)       
+    131, 53, 1, 0,    // ld a1,0(sp)      
+    19, 1, 129, 0,    // addi sp,sp,8      
+    3, 53, 1, 0,      // ld a0,0(sp)    
+    19, 1, 129, 0,    // addi sp,sp,8      
+    147, 8, 16, 25,   // addi a7,zero,401       
+    115, 0, 0, 0,     // ecall     
+    19, 5, 8, 0,      // addi a0,a6,0    
+    103, 128, 0, 0,   // jalr zero,0(ra)       
+    19, 1, 129, 255,  // addi sp,sp,-8        
+    35, 48, 17, 0,    // sd ra,0(sp)      
+    19, 1, 129, 255,  // addi sp,sp,-8        
+    35, 48, 129, 0,   // sd s0,0(sp)
+    19, 4, 1, 0,      // addi s0,sp,0
+    147, 2, 112, 3,   // addi t0,zero,55
+    19, 3, 160, 2,    // addi t1,zero,42
+    179, 130, 98, 0,  // add t0,t0,t1        
+    19, 133, 2, 0,    // addi a0,t0,0      
+    111, 0, 64, 0,    // jal zero,1
+    19, 1, 4, 0,      // addi sp,s0,0    
+    3, 52, 1, 0,      // ld s0,0(sp)    
+    19, 1, 129, 0,    // addi sp,sp,8
+    131, 48, 1, 0,    // ld ra,0(sp)
+    19, 1, 129, 1,    // addi sp,sp,24
+    103, 128, 0, 0,   // jalr zero,0(ra)
+    0, 0, 0, 0,          
+    0, 0, 0, 0         
   ];
+*/
 
-  let mut stream = InstructionStream::new(&input);
-
-  assert_eq!(stream.next().unwrap(), Instruction::U { opcode: Opcode::Lui, imm: 0x10, rd: Register::T0});
-  assert_eq!(stream.next().unwrap(), Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::T0, rs1: Register::T0, imm: 384 });
-  assert_eq!(stream.next().unwrap(), Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::GlobalPointer, rs1: Register::T0, imm: 0 });
-  assert_eq!(stream.next().unwrap(), Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A0, rs1: Register::Zero, imm: 0 });
-  assert_eq!(stream.next().unwrap(), Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A7, rs1: Register::Zero, imm: 214 });
-  assert_eq!(stream.next().unwrap(), Instruction::I { opcode: Opcode::System(SystemFunction::ECALL), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
-  //ecall
+  decode_test(&[183, 2, 1, 0],    Instruction::U { opcode: Opcode::Lui, imm: 0x10000, rd: Register::T0});
+  decode_test(&[147, 130, 2, 24], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::T0, rs1: Register::T0, imm: 384 });
+  decode_test(&[19, 5, 0, 0],     Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A0, rs1: Register::Zero, imm: 0 });
+  decode_test(&[147, 8, 96, 13],  Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A7, rs1: Register::Zero, imm: 214 });
+  decode_test(&[0x93, 0x87, 0xe0, 0xFC], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A5, rs1: Register::ReturnAddress, imm: -50 });
+  decode_test(&[115, 0, 0, 0],    Instruction::I { opcode: Opcode::System(SystemFunction::ECALL), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
+  decode_test(&[239, 0, 64, 15],  Instruction::J { opcode: Opcode::JAl, rd: Register::ReturnAddress, imm: 122});
+  decode_test(&[99, 4, 101, 0],   Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8});
+  decode_test(&[0x83, 0x21, 0x72, 0x03], Instruction::I { opcode: Opcode::Load(LoadWidth::Word), imm: 55, rs1: Register::ThreadPointer, rd: Register::GlobalPointer });
+  decode_test(&[35, 48, 81, 0], Instruction::S { opcode: Opcode::Store(StoreWidth::DoubleWord), rs2: Register::T0, rs1: Register::StackPointer, imm: 0 });
 }
