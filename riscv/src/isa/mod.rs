@@ -326,13 +326,22 @@ impl Instruction {
 
 
   pub fn from_32bits(encoded: u32) -> Instruction {
-    println!("Enco'd: {:032b}", encoded);
     let funct3   = (encoded >> 12) & 0b111;
     let funct7   = (encoded >> 25) & 0b1111111;
     let rd       = (encoded >> 7) & 0b11111;
     let rs1      = (encoded >> 15) & 0b11111;
     let rs2      = (encoded >> 20) & 0b11111;
-    let imm11_0  = (encoded >> 20) & 0b111111111111;
+    
+    let imm31_12  = encoded >> 12;
+    let imm19_12  = (encoded >> 12) & 0b11111111;
+    let imm12     = (encoded >> 31) & 0b1;
+    let imm11_5   = (encoded >> 25) & 0b1111111;
+    let imm10_5   = (encoded >> 25) & 0b111111;
+    let imm10_1   = (encoded >> 22) & 0b1111111111;
+    let imm4_1    = (encoded >> 8) & 0b1111;
+    let imm11_0   = (encoded >> 20) & 0b111111111111;
+    let imm4_0    = (encoded >> 7) & 0b11111;
+
     let sign_bit = (encoded >> 31) & 0b1;
     let opcode = Instruction::opcode(
       encoded as u16, 
@@ -358,12 +367,11 @@ impl Instruction {
         opcode, 
         rd: Register::from_u8(rd as u8), 
         imm: imm as i32, 
-        rs1: Register::from_u8(rs1 as u8) }
+        rs1: Register::from_u8(rs1 as u8) 
+      }
     };
 
     let from_s_type = |opcode| {
-      let imm11_5 = (encoded >> 25) & 0b1111111;
-      let imm4_0 = (encoded >> 7) & 0b11111;
       let imm = (imm11_5 << 5) | imm4_0;
 
       Instruction::S { 
@@ -375,13 +383,7 @@ impl Instruction {
     };
 
     let from_b_type = |opcode| {
-
-      // let encoded = 0b00000000000000000000111100000000u32;
-      let imm12   = (encoded >> 31) & 0b1;
-      let imm10_5 = (encoded >> 25) & 0b111111;
-      let imm4_1  = (encoded >> 8) & 0b1111;
-      let imm11   = (encoded >> 7) & 0b1;
-
+      let imm11 = (encoded >> 7) & 0b1;
       let imm = (if sign_bit > 0 { 0b11111111111111111111 << 12 } else { 0 })
                    | (imm12 << 12)
                    | (imm11 << 11)
@@ -397,7 +399,6 @@ impl Instruction {
     };
 
     let from_u_type = |opcode| {
-      let imm31_12: u32 = encoded >> 12;
       let imm = imm31_12 << 12;
 
       Instruction::U {
@@ -408,10 +409,8 @@ impl Instruction {
     };
 
     let from_j_type = |opcode| {
-      let imm10_1  = (encoded >> 22) & 0b1111111111;
-      let imm11    = (encoded >> 20) & 0b1;
-      let imm19_12 = (encoded >> 12) & 0b11111111;
-      
+      let imm11 = (encoded >> 20) & 0b1;
+
       let imm = (if sign_bit > 0 { 0b11111111111 << 20 } else { 0 })
                    | (imm19_12 << 12)
                    | (imm11 << 11)
@@ -425,15 +424,15 @@ impl Instruction {
     };
 
     let instruction = match opcode {
-      Opcode::Lui   => from_u_type(opcode),
-      Opcode::AuiPc => from_u_type(opcode),
-      Opcode::JAl   => from_j_type(opcode),
-      Opcode::JAlr  => from_i_type(opcode),
+      Opcode::Lui       => from_u_type(opcode),
+      Opcode::AuiPc     => from_u_type(opcode),
+      Opcode::JAl       => from_j_type(opcode),
+      Opcode::JAlr      => from_i_type(opcode),
       Opcode::Branch(_) => from_b_type(opcode),
-      Opcode::Load(_) => from_i_type(opcode),
-      Opcode::Store(_) => from_s_type(opcode),
-      Opcode::OpImm(_) => from_i_type(opcode),
-      Opcode::Op(_) => from_r_type(opcode),
+      Opcode::Load(_)   => from_i_type(opcode),
+      Opcode::Store(_)  => from_s_type(opcode),
+      Opcode::OpImm(_)  => from_i_type(opcode),
+      Opcode::Op(_)     => from_r_type(opcode),
       Opcode::System(_) => from_i_type(opcode),
 
       _ => unimplemented!("opcode {:?}", opcode)
@@ -525,7 +524,7 @@ impl<'a> Iterator for InstructionStream<'a> {
 }
 
 #[test]
-pub fn test_stream_decoding() {
+pub fn test_stream_decoding_add() {
   let input = [183, 2, 1, 0, 147, 130, 2, 24, 147, 129, 2, 0, 19, 5, 0, 0, 147, 8, 96, 13, 115, 0, 0, 0, 19, 5, 117, 0, 147, 2, 128, 0, 179, 114, 85, 2, 51, 5, 85, 64, 147, 8, 96, 13, 115, 0, 0, 0, 35, 188, 161, 254, 19, 5, 0, 0, 147, 2, 129, 0, 19, 1, 129, 255, 35, 48, 81, 0, 239, 0, 64, 15, 19, 1, 129, 255, 35, 48, 161, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 208, 5, 115, 0, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 240, 3, 115, 0, 0, 0, 103, 128, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 0, 4, 115, 0, 0, 0, 103, 128, 0, 0, 131, 54, 1, 0, 19, 1, 129, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 19, 5, 192, 249, 147, 8, 128, 3, 115, 0, 0, 0, 103, 128, 0, 0, 131, 50, 1, 0, 19, 1, 129, 0, 147, 130, 114, 0, 19, 3, 128, 0, 51, 243, 98, 2, 179, 130, 98, 64, 3, 179, 129, 255, 51, 5, 83, 0, 147, 8, 96, 13, 115, 0, 0, 0, 99, 4, 101, 0, 99, 8, 0, 0, 99, 6, 80, 0, 19, 5, 0, 0, 99, 6, 0, 0, 35, 188, 161, 254, 19, 5, 3, 0, 103, 128, 0, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 16, 25, 115, 0, 0, 0, 19, 5, 8, 0, 103, 128, 0, 0, 19, 1, 129, 255, 35, 48, 17, 0, 19, 1, 129, 255, 35, 48, 129, 0, 19, 4, 1, 0, 147, 2, 112, 3, 19, 3, 160, 2, 179, 130, 98, 0, 19, 133, 2, 0, 111, 0, 64, 0, 19, 1, 4, 0, 3, 52, 1, 0, 19, 1, 129, 0, 131, 48, 1, 0, 19, 1, 129, 1, 103, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   let stream = InstructionStream::new(&input);
 
@@ -542,8 +541,8 @@ pub fn test_instruction_decoding() {
     let actual = stream.next().unwrap();
     assert_eq!(actual, expected);
   }
-/*
-  let input = [
+  
+  /*
     183, 2, 1, 0,     // lui t0,0x10
     147, 130, 2, 24,  // addi t0,t0,384
     147, 129, 2, 0,   // addi gp,t0,0
@@ -638,10 +637,7 @@ pub fn test_instruction_decoding() {
     131, 48, 1, 0,    // ld ra,0(sp)
     19, 1, 129, 1,    // addi sp,sp,24
     103, 128, 0, 0,   // jalr zero,0(ra)
-    0, 0, 0, 0,          
-    0, 0, 0, 0         
-  ];
-*/
+  */
 
   decode_test(&[183, 2, 1, 0],    Instruction::U { opcode: Opcode::Lui, imm: 0x10000, rd: Register::T0});
   decode_test(&[147, 130, 2, 24], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::T0, rs1: Register::T0, imm: 384 });
