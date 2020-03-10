@@ -16,7 +16,7 @@ pub enum Opcode {
   StoreFp,
   Custom1,
   Amo,
-  Op,
+  Op(OpFunction),
   Lui,
   Op32,
 
@@ -111,24 +111,73 @@ pub enum FPRegister {
 
 #[derive(Debug, PartialEq)]
 pub enum OpImmFunction {
-  ADDI,
-  SLTI,
-  SLTIU,
-  XORI,
-  ORI,
-  ANDI,
+  ADD,
+  SLT,
+  SLTU,
+  XOR,
+  OR,
+  AND,
 }
 
 impl OpImmFunction {
   pub fn from_u8(value: u8) -> Self {
     match value {
-      0b000 => OpImmFunction::ADDI,
-      0b010 => OpImmFunction::SLTI,
-      0b011 => OpImmFunction::SLTIU,
-      0b110 => OpImmFunction::ORI,
-      0b111 => OpImmFunction::ANDI,
+      0b000 => OpImmFunction::ADD,
+      0b010 => OpImmFunction::SLT,
+      0b011 => OpImmFunction::SLTU,
+      0b110 => OpImmFunction::OR,
+      0b111 => OpImmFunction::AND,
 
       _ => unimplemented!()
+    }
+  }
+}
+#[derive(Debug, PartialEq)]
+pub enum OpFunction {
+  ADD,
+  SUB,
+  SLL,
+  SLT,
+  SLTU,
+  XOR,
+  SRL,
+  SRA,
+  OR,
+  AND,
+
+  MUL,
+  MULH,
+  MULHSU,
+  MULHU,
+  DIV,
+  DIVU,
+  REM,
+  REMU
+}
+
+impl OpFunction {
+  pub fn from_func3_func7(func3: u8, func7: u8) -> Self {
+    match (func7, func3) {
+      (0b0000000, 0b000) => Self::ADD,
+      (0b0100000, 0b000) => Self::SUB,
+      (0b0000000, 0b001) => Self::SLL,
+      (0b0000000, 0b010) => Self::SLT,
+      (0b0000000, 0b011) => Self::SLTU,
+      (0b0000000, 0b100) => Self::XOR,
+      (0b0000000, 0b101) => Self::SRL,
+      (0b0100000, 0b101) => Self::SRA,
+      (0b0000000, 0b110) => Self::OR,
+      (0b0000000, 0b111) => Self::AND,
+      (0b0000001, 0b000) => Self::MUL,
+      (0b0000001, 0b001) => Self::MULH,
+      (0b0000001, 0b010) => Self::MULHSU,
+      (0b0000001, 0b011) => Self::MULHU,
+      (0b0000001, 0b100) => Self::DIV,
+      (0b0000001, 0b101) => Self::DIVU,
+      (0b0000001, 0b110) => Self::REM,
+      (0b0000001, 0b111) => Self::REMU,
+
+      _ => unimplemented!("Op func7={:07b} func3={:03b}", func7, func3)
     }
   }
 }
@@ -226,7 +275,7 @@ impl StoreWidth {
 
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
-  R { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, rs2: Register, funct7: u8 },
+  R { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, rs2: Register /*, funct7: u8 */ },
   I { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: i32 },
   S { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
   B { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
@@ -236,7 +285,7 @@ pub enum Instruction {
 
 impl Instruction {
 
-  fn opcode(base: u16, func3: u8, imm11_0: u16) -> Opcode {
+  fn opcode(base: u16, func3: u8, imm11_0: u16, func7: u8) -> Opcode {
     let opcode = base & 0b1111111;
     match opcode {
       0b0000011 => Opcode::Load(LoadWidth::from_func3(func3)),
@@ -251,7 +300,7 @@ impl Instruction {
       0b0100111 => Opcode::StoreFp,
       0b0101011 => Opcode::Custom1,
       0b0101111 => Opcode::Amo,
-      0b0110011 => Opcode::Op,
+      0b0110011 => Opcode::Op(OpFunction::from_func3_func7(func3, func7)),
       0b0110111 => Opcode::Lui,
       0b0111011 => Opcode::Op32,
 
@@ -278,7 +327,8 @@ impl Instruction {
 
   pub fn from_32bits(encoded: u32) -> Instruction {
     println!("Enco'd: {:032b}", encoded);
-    let func3    = (encoded >> 12) & 0b111;
+    let funct3   = (encoded >> 12) & 0b111;
+    let funct7   = (encoded >> 25) & 0b1111111;
     let rd       = (encoded >> 7) & 0b11111;
     let rs1      = (encoded >> 15) & 0b11111;
     let rs2      = (encoded >> 20) & 0b11111;
@@ -286,8 +336,19 @@ impl Instruction {
     let sign_bit = (encoded >> 31) & 0b1;
     let opcode = Instruction::opcode(
       encoded as u16, 
-      func3 as u8,
-      imm11_0 as u16);
+      funct3 as u8,
+      imm11_0 as u16,
+      funct7 as u8
+    );
+
+    let from_r_type = |opcode| {
+      Instruction::R { 
+        opcode,
+        rs2: Register::from_u8(rs2 as u8),
+        rs1: Register::from_u8(rs1 as u8),
+        rd: Register::from_u8(rd as u8)
+      }
+    };
 
     let from_i_type = |opcode| {
       let imm: u32 = (if sign_bit > 0 { 0b11111111111111111111 << 12 } else { 0 })
@@ -309,7 +370,8 @@ impl Instruction {
         opcode, 
         rs2: Register::from_u8(rs2 as u8),
         rs1: Register::from_u8(rs1 as u8), 
-        imm: imm as i32}
+        imm: imm as i32
+      }
     };
 
     let from_b_type = |opcode| {
@@ -371,6 +433,7 @@ impl Instruction {
       Opcode::Load(_) => from_i_type(opcode),
       Opcode::Store(_) => from_s_type(opcode),
       Opcode::OpImm(_) => from_i_type(opcode),
+      Opcode::Op(_) => from_r_type(opcode),
       Opcode::System(_) => from_i_type(opcode),
 
       _ => unimplemented!("opcode {:?}", opcode)
@@ -461,7 +524,7 @@ impl<'a> Iterator for InstructionStream<'a> {
   }
 }
 
-//#[test]
+#[test]
 pub fn test_stream_decoding() {
   let input = [183, 2, 1, 0, 147, 130, 2, 24, 147, 129, 2, 0, 19, 5, 0, 0, 147, 8, 96, 13, 115, 0, 0, 0, 19, 5, 117, 0, 147, 2, 128, 0, 179, 114, 85, 2, 51, 5, 85, 64, 147, 8, 96, 13, 115, 0, 0, 0, 35, 188, 161, 254, 19, 5, 0, 0, 147, 2, 129, 0, 19, 1, 129, 255, 35, 48, 81, 0, 239, 0, 64, 15, 19, 1, 129, 255, 35, 48, 161, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 208, 5, 115, 0, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 240, 3, 115, 0, 0, 0, 103, 128, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 0, 4, 115, 0, 0, 0, 103, 128, 0, 0, 131, 54, 1, 0, 19, 1, 129, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 19, 5, 192, 249, 147, 8, 128, 3, 115, 0, 0, 0, 103, 128, 0, 0, 131, 50, 1, 0, 19, 1, 129, 0, 147, 130, 114, 0, 19, 3, 128, 0, 51, 243, 98, 2, 179, 130, 98, 64, 3, 179, 129, 255, 51, 5, 83, 0, 147, 8, 96, 13, 115, 0, 0, 0, 99, 4, 101, 0, 99, 8, 0, 0, 99, 6, 80, 0, 19, 5, 0, 0, 99, 6, 0, 0, 35, 188, 161, 254, 19, 5, 3, 0, 103, 128, 0, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 16, 25, 115, 0, 0, 0, 19, 5, 8, 0, 103, 128, 0, 0, 19, 1, 129, 255, 35, 48, 17, 0, 19, 1, 129, 255, 35, 48, 129, 0, 19, 4, 1, 0, 147, 2, 112, 3, 19, 3, 160, 2, 179, 130, 98, 0, 19, 133, 2, 0, 111, 0, 64, 0, 19, 1, 4, 0, 3, 52, 1, 0, 19, 1, 129, 0, 131, 48, 1, 0, 19, 1, 129, 1, 103, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   let stream = InstructionStream::new(&input);
@@ -581,10 +644,10 @@ pub fn test_instruction_decoding() {
 */
 
   decode_test(&[183, 2, 1, 0],    Instruction::U { opcode: Opcode::Lui, imm: 0x10000, rd: Register::T0});
-  decode_test(&[147, 130, 2, 24], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::T0, rs1: Register::T0, imm: 384 });
-  decode_test(&[19, 5, 0, 0],     Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A0, rs1: Register::Zero, imm: 0 });
-  decode_test(&[147, 8, 96, 13],  Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A7, rs1: Register::Zero, imm: 214 });
-  decode_test(&[0x93, 0x87, 0xe0, 0xFC], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A5, rs1: Register::ReturnAddress, imm: -50 });
+  decode_test(&[147, 130, 2, 24], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::T0, rs1: Register::T0, imm: 384 });
+  decode_test(&[19, 5, 0, 0],     Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::A0, rs1: Register::Zero, imm: 0 });
+  decode_test(&[147, 8, 96, 13],  Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::A7, rs1: Register::Zero, imm: 214 });
+  decode_test(&[0x93, 0x87, 0xe0, 0xFC], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::A5, rs1: Register::ReturnAddress, imm: -50 });
   decode_test(&[115, 0, 0, 0],    Instruction::I { opcode: Opcode::System(SystemFunction::ECALL), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
   decode_test(&[239, 0, 64, 15],  Instruction::J { opcode: Opcode::JAl, rd: Register::ReturnAddress, imm: 122});
   decode_test(&[99, 4, 101, 0],   Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8});
