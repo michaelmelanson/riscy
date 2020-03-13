@@ -515,7 +515,6 @@ pub enum Instruction {
 
 impl Instruction {
   pub fn from_32bits(encoded: u32) -> Instruction {
-    println!("Input:   {:032b}", encoded);
     let funct3   = (encoded >> 12) & 0b111;
     let funct7   = (encoded >> 25) & 0b1111111;
     let rd       = (encoded >> 7) & 0b11111;
@@ -628,8 +627,6 @@ impl Instruction {
       _ => unimplemented!("opcode {:?}", opcode)
     };
 
-    println!("Instruction: {:?}", instruction);
-
     instruction
   }
 
@@ -691,7 +688,6 @@ impl Instruction {
       )
     };
 
-    println!("Encoded: {:032b}", encoded);
     encoded.to_le_bytes().to_vec()
   }
 }
@@ -727,10 +723,7 @@ impl<'a> Iterator for DecodingStream<'a> {
     let ones = base.trailing_ones();
     
     match ones {
-      1 => { 
-        println!("16-bit instruction: {:#018b}", base);
-        unimplemented!();
-      },
+      1 => unimplemented!("16-bit instruction: {:?}", base),
 
       2..=4 => {
         let second: u32 = self.cursor.read_u16::<LittleEndian>().unwrap() as u32;
@@ -746,8 +739,7 @@ impl<'a> Iterator for DecodingStream<'a> {
           self.cursor.read_u16::<LittleEndian>().unwrap()
         ];
 
-        println!("48-bit instruction: {:?}", parcels);
-        unimplemented!();
+        unimplemented!("48-bit instruction: {:?}", parcels);
       },
 
       6 => {
@@ -757,19 +749,12 @@ impl<'a> Iterator for DecodingStream<'a> {
           self.cursor.read_u16::<LittleEndian>().unwrap(),
           self.cursor.read_u16::<LittleEndian>().unwrap()
         ];
-        println!("64-bit instruction: {:?}", parcels);
-        unimplemented!();
+
+        unimplemented!("64-bit instruction: {:?}", parcels);
       },
 
-      7..=11 => { 
-        println!("Large instruction ({} trailing ones): {:#018b}", ones, base);
-        unimplemented!();
-      },
-
-      _ => { 
-        println!("Invalid instruction ({} trailing ones): {:#018b}", ones, base); 
-        None
-      },
+      7..=11 => unimplemented!("Large instruction ({} trailing ones): {:#018b}", ones, base),
+      _ => unimplemented!("Invalid instruction ({} trailing ones): {:#018b}", ones, base),
     }
   }
 }
