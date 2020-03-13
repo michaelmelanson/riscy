@@ -37,6 +37,96 @@ pub enum Opcode {
   Custom3,
 }
 
+impl Opcode {
+
+  fn new(base: u16, func3: u8, imm11_0: u16, func7: u8) -> Opcode {
+    let opcode = base & 0b1111111;
+    match opcode {
+      0b0000011 => Opcode::Load(LoadWidth::from_func3(func3)),
+      0b0000111 => Opcode::LoadFp,
+      0b0001011 => Opcode::Custom0,
+      0b0001111 => Opcode::MiscMem,
+      0b0010011 => Opcode::OpImm(OpImmFunction::from_func3(func3)),
+      0b0010111 => Opcode::AuiPc,
+      0b0011011 => Opcode::OpImm32,
+
+      0b0100011 => Opcode::Store(StoreWidth::from_func3(func3)),
+      0b0100111 => Opcode::StoreFp,
+      0b0101011 => Opcode::Custom1,
+      0b0101111 => Opcode::Amo,
+      0b0110011 => Opcode::Op(OpFunction::from_func3_func7(func3, func7)),
+      0b0110111 => Opcode::Lui,
+      0b0111011 => Opcode::Op32,
+
+      0b1000011 => Opcode::MAdd,
+      0b1000111 => Opcode::MSub,
+      0b1001011 => Opcode::NMSub,
+      0b1001111 => Opcode::NMAdd,
+      0b1010011 => Opcode::OpFp,
+      0b1010111 => Opcode::Reserved0,
+      0b1011011 => Opcode::Custom2,
+
+      0b1100011 => Opcode::Branch(BranchOperation::from_func3(func3)),
+      0b1100111 => Opcode::JAlr,
+      0b1101011 => Opcode::Reserved1,
+      0b1101111 => Opcode::JAl,
+      0b1110011 => Opcode::System(SystemFunction::from_imm(imm11_0)),
+      0b1110111 => Opcode::Reserved2,
+      0b1111011 => Opcode::Custom3,
+
+      _ => panic!("Unknown opcode")
+    }
+  }
+
+  fn opcode_field(&self) -> i32 {
+    match self {
+      Opcode::Load(_) => 0b0000011,
+      Opcode::LoadFp => 0b0000111, 
+      Opcode::Custom0 => 0b0001011, 
+      Opcode::MiscMem => 0b0001111, 
+      Opcode::OpImm(_) => 0b0010011, 
+      Opcode::AuiPc => 0b0010111, 
+      Opcode::OpImm32 => 0b0011011, 
+
+      Opcode::Store(_) => 0b0100011, 
+      Opcode::StoreFp => 0b0100111, 
+      Opcode::Custom1 => 0b0101011, 
+      Opcode::Amo => 0b0101111, 
+      Opcode::Op(_) => 0b0110011, 
+      Opcode::Lui => 0b0110111, 
+      Opcode::Op32 => 0b0111011, 
+
+      Opcode::MAdd => 0b1000011, 
+      Opcode::MSub => 0b1000111, 
+      Opcode::NMSub => 0b1001011, 
+      Opcode::NMAdd => 0b1001111, 
+      Opcode::OpFp => 0b1010011, 
+      Opcode::Reserved0 => 0b1010111, 
+      Opcode::Custom2 => 0b1011011, 
+
+      Opcode::Branch(_) => 0b1100011, 
+      Opcode::JAlr => 0b1100111, 
+      Opcode::Reserved1 => 0b1101011, 
+      Opcode::JAl => 0b1101111,
+      Opcode::System(_) => 0b1110011, 
+      Opcode::Reserved2 => 0b1110111, 
+      Opcode::Custom3 => 0b1111011
+    }
+  }
+
+  pub fn funct3_field(&self) -> i32 {
+    match self {
+      Opcode::Load(function) => function.to_func3(),
+      Opcode::OpImm(function) => function.to_func3(),
+      Opcode::Store(function) => function.to_func3(),
+      Opcode::Op(function) => function.to_func3(),
+      Opcode::Branch(function) => function.to_func3(),
+      Opcode::System(_) => 0,
+
+      _ => unimplemented!("opcode {:?} does not have funct field", self)
+    }
+  }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Register {
@@ -97,6 +187,48 @@ impl Register {
       _ => unimplemented!()
     }
   }
+  pub fn encode(&self) -> i32 {
+    match self {
+      Register::Zero => 0,  
+
+      Register::ReturnAddress => 1,                  
+      Register::StackPointer => 2,                             
+      Register::GlobalPointer => 3, 
+      Register::ThreadPointer => 4, 
+
+      Register::T0 => 5, 
+      Register::T1 => 6, 
+      Register::T2 => 7, 
+
+      Register::S0 => 8, 
+      Register::S1 => 9, 
+
+      Register::A0 => 10, 
+      Register::A1 => 11,
+      Register::A2 => 12, 
+      Register::A3 => 13,       
+      Register::A4 => 14,                   
+      Register::A5 => 15,                 
+      Register::A6 => 16, 
+      Register::A7 => 17,     
+
+      Register::S2 => 18,
+      Register::S3 => 19,
+      Register::S4 => 20,
+      Register::S5 => 21,
+      Register::S6 => 22,
+      Register::S7 => 23,
+      Register::S8 => 24,
+      Register::S9 => 25, 
+      Register::S10 => 26,
+      Register::S11 => 27,
+
+      Register::T3 => 28, 
+      Register::T4 => 29, 
+      Register::T5 => 30,
+      Register::T6 => 32,                  
+    }
+  }
 }
 
 pub enum FPRegister {
@@ -120,7 +252,7 @@ pub enum OpImmFunction {
 }
 
 impl OpImmFunction {
-  pub fn from_u8(value: u8) -> Self {
+  pub fn from_func3(value: u8) -> Self {
     match value {
       0b000 => OpImmFunction::ADD,
       0b010 => OpImmFunction::SLT,
@@ -131,7 +263,20 @@ impl OpImmFunction {
       _ => unimplemented!()
     }
   }
+
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      OpImmFunction::ADD => 0b000,
+      OpImmFunction::SLT => 0b010,
+      OpImmFunction::SLTU => 0b011,
+      OpImmFunction::OR => 0b110,
+      OpImmFunction::AND => 0b111,
+
+      _ => unimplemented!("funct3 not defined for {:?}", self)
+    }
+  }
 }
+
 #[derive(Debug, PartialEq)]
 pub enum OpFunction {
   ADD,
@@ -180,6 +325,29 @@ impl OpFunction {
       _ => unimplemented!("Op func7={:07b} func3={:03b}", func7, func3)
     }
   }
+
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      Self::ADD => 0b000,
+      Self::SUB => 0b000,
+      Self::SLL => 0b001,
+      Self::SLT => 0b010,
+      Self::SLTU => 0b011,
+      Self::XOR => 0b100,
+      Self::SRL => 0b101,
+      Self::SRA => 0b101,
+      Self::OR => 0b110,
+      Self::AND => 0b111,
+      Self::MUL => 0b000,
+      Self::MULH => 0b001,
+      Self::MULHSU => 0b010,
+      Self::MULHU => 0b011,
+      Self::DIV => 0b100,
+      Self::DIVU => 0b101,
+      Self::REM => 0b110,
+      Self::REMU => 0b111
+    }
+  }
 }
 
 #[derive(Debug, PartialEq)]
@@ -222,6 +390,17 @@ impl BranchOperation {
       _ => unimplemented!()
     }
   }
+
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      BranchOperation::Equal => 0b000,
+      BranchOperation::NotEqual => 0b001,
+      BranchOperation::LessThan => 0b100,
+      BranchOperation::GreaterOrEqual => 0b101,
+      BranchOperation::LessThanUnsigned => 0b110,
+      BranchOperation::GreaterOrEqualUnsigned => 0b111
+    }
+  }
 }
 
 
@@ -248,6 +427,17 @@ impl LoadWidth {
       _ => unimplemented!("Load width {:03b}", func3)
     }
   }
+
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      LoadWidth::Byte => 0b000,
+      LoadWidth::HalfWord => 0b001,
+      LoadWidth::Word => 0b010,
+      LoadWidth::DoubleWord => 0b011,
+      LoadWidth::ByteUnsigned => 0b100,
+      LoadWidth::HalfWordUnsigned => 0b101
+    }
+  }
 }
 
 
@@ -270,6 +460,15 @@ impl StoreWidth {
       _ => unimplemented!("Store width {:03b}", func3)
     }
   }
+
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      Self::Byte => 0b000,
+      Self::HalfWord => 0b001,
+      Self::Word => 0b010,
+      Self::DoubleWord => 0b011
+    }
+  }
 }
 
 
@@ -284,48 +483,8 @@ pub enum Instruction {
 }
 
 impl Instruction {
-
-  fn opcode(base: u16, func3: u8, imm11_0: u16, func7: u8) -> Opcode {
-    let opcode = base & 0b1111111;
-    match opcode {
-      0b0000011 => Opcode::Load(LoadWidth::from_func3(func3)),
-      0b0000111 => Opcode::LoadFp,
-      0b0001011 => Opcode::Custom0,
-      0b0001111 => Opcode::MiscMem,
-      0b0010011 => Opcode::OpImm(OpImmFunction::from_u8(func3)),
-      0b0010111 => Opcode::AuiPc,
-      0b0011011 => Opcode::OpImm32,
-
-      0b0100011 => Opcode::Store(StoreWidth::from_func3(func3)),
-      0b0100111 => Opcode::StoreFp,
-      0b0101011 => Opcode::Custom1,
-      0b0101111 => Opcode::Amo,
-      0b0110011 => Opcode::Op(OpFunction::from_func3_func7(func3, func7)),
-      0b0110111 => Opcode::Lui,
-      0b0111011 => Opcode::Op32,
-
-      0b1000011 => Opcode::MAdd,
-      0b1000111 => Opcode::MSub,
-      0b1001011 => Opcode::NMSub,
-      0b1001111 => Opcode::NMAdd,
-      0b1010011 => Opcode::OpFp,
-      0b1010111 => Opcode::Reserved0,
-      0b1011011 => Opcode::Custom2,
-
-      0b1100011 => Opcode::Branch(BranchOperation::from_func3(func3)),
-      0b1100111 => Opcode::JAlr,
-      0b1101011 => Opcode::Reserved1,
-      0b1101111 => Opcode::JAl,
-      0b1110011 => Opcode::System(SystemFunction::from_imm(imm11_0)),
-      0b1110111 => Opcode::Reserved2,
-      0b1111011 => Opcode::Custom3,
-
-      _ => panic!("Unknown opcode")
-    }
-  }
-
-
   pub fn from_32bits(encoded: u32) -> Instruction {
+    println!("Input:   {:032b}", encoded);
     let funct3   = (encoded >> 12) & 0b111;
     let funct7   = (encoded >> 25) & 0b1111111;
     let rd       = (encoded >> 7) & 0b11111;
@@ -343,7 +502,7 @@ impl Instruction {
     let imm4_0    = (encoded >> 7) & 0b11111;
 
     let sign_bit = (encoded >> 31) & 0b1;
-    let opcode = Instruction::opcode(
+    let opcode = Opcode::new(
       encoded as u16, 
       funct3 as u8,
       imm11_0 as u16,
@@ -443,6 +602,60 @@ impl Instruction {
     instruction
   }
 
+  pub fn bytes(&self) -> Vec<u8> {
+    let encoded = match self {
+
+      Instruction::I { imm, rs1, rd, opcode } => {
+        let funct3 = opcode.funct3_field();
+
+        (imm << 20) | 
+        (rs1.encode() << 15) | 
+        (funct3 << 12) | 
+        (rd.encode() << 7) | 
+        (opcode.opcode_field())
+      },
+
+      Instruction::S { imm, rs2, rs1, opcode } => (
+        (((imm >> 5) & 0b1111111) << 25) |
+        (rs2.encode() << 20) |
+        (rs1.encode() << 15) |
+        (opcode.funct3_field() << 12) |
+        ((imm & 0b11111) << 7) |
+        opcode.opcode_field()
+      ),
+
+      Instruction::B { imm, rs2, rs1, opcode } => (
+        (((imm >> 20) & 0b1) << 31) |
+        (((imm >> 5) & 0b111111) << 25) |
+        (rs2.encode() << 20) |
+        (rs1.encode() << 15) |
+        (opcode.funct3_field() << 12) |
+        (((imm >> 1) & 0b1111) << 8) |
+        (((imm >> 11) & 0b1) << 7) |
+        opcode.opcode_field()
+      ),
+
+      Instruction::U { imm, rd, opcode } => 
+        rd.encode() << 7
+        | opcode.opcode_field()
+        | (imm & 0b11111111111111111111),
+
+
+      Instruction::J { imm, rd, opcode } => (
+        (((imm >> 20) & 0b1) << 31) |
+        (((imm >> 1) & 0b1111111111) << 22) |
+        (((imm >> 11) & 0b1) << 20) |
+        (((imm >> 12) & 0b11111111) << 12) |
+        (rd.encode() << 7) |
+        opcode.opcode_field()
+      ),
+
+      _ => unimplemented!("{:?}", self)
+    };
+
+    println!("Encoded: {:032b}", encoded);
+    encoded.to_le_bytes().to_vec()
+  }
 }
 
 #[derive(Debug)]
@@ -450,19 +663,19 @@ pub enum ReadError {
   InvalidInstruction
 }
 
-pub struct InstructionStream<'a> {
+pub struct DecodingStream<'a> {
   cursor: Cursor<&'a [u8]>
 }
 
-impl <'a> InstructionStream<'a> {
-  pub fn new(bytes: &'a [u8]) -> InstructionStream {
-    InstructionStream {
+impl <'a> DecodingStream<'a> {
+  pub fn new(bytes: &'a [u8]) -> DecodingStream {
+    DecodingStream {
       cursor: Cursor::new(bytes)
     }
   }
 }
 
-impl<'a> Iterator for InstructionStream<'a> {
+impl<'a> Iterator for DecodingStream<'a> {
   type Item = Instruction;
 
   fn next(&mut self) -> Option<<Self as Iterator>::Item> { 
@@ -526,7 +739,7 @@ impl<'a> Iterator for InstructionStream<'a> {
 #[test]
 pub fn test_stream_decoding_add() {
   let input = [183, 2, 1, 0, 147, 130, 2, 24, 147, 129, 2, 0, 19, 5, 0, 0, 147, 8, 96, 13, 115, 0, 0, 0, 19, 5, 117, 0, 147, 2, 128, 0, 179, 114, 85, 2, 51, 5, 85, 64, 147, 8, 96, 13, 115, 0, 0, 0, 35, 188, 161, 254, 19, 5, 0, 0, 147, 2, 129, 0, 19, 1, 129, 255, 35, 48, 81, 0, 239, 0, 64, 15, 19, 1, 129, 255, 35, 48, 161, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 208, 5, 115, 0, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 240, 3, 115, 0, 0, 0, 103, 128, 0, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 0, 4, 115, 0, 0, 0, 103, 128, 0, 0, 131, 54, 1, 0, 19, 1, 129, 0, 3, 54, 1, 0, 19, 1, 129, 0, 131, 53, 1, 0, 19, 1, 129, 0, 19, 5, 192, 249, 147, 8, 128, 3, 115, 0, 0, 0, 103, 128, 0, 0, 131, 50, 1, 0, 19, 1, 129, 0, 147, 130, 114, 0, 19, 3, 128, 0, 51, 243, 98, 2, 179, 130, 98, 64, 3, 179, 129, 255, 51, 5, 83, 0, 147, 8, 96, 13, 115, 0, 0, 0, 99, 4, 101, 0, 99, 8, 0, 0, 99, 6, 80, 0, 19, 5, 0, 0, 99, 6, 0, 0, 35, 188, 161, 254, 19, 5, 3, 0, 103, 128, 0, 0, 131, 53, 1, 0, 19, 1, 129, 0, 3, 53, 1, 0, 19, 1, 129, 0, 147, 8, 16, 25, 115, 0, 0, 0, 19, 5, 8, 0, 103, 128, 0, 0, 19, 1, 129, 255, 35, 48, 17, 0, 19, 1, 129, 255, 35, 48, 129, 0, 19, 4, 1, 0, 147, 2, 112, 3, 19, 3, 160, 2, 179, 130, 98, 0, 19, 133, 2, 0, 111, 0, 64, 0, 19, 1, 4, 0, 3, 52, 1, 0, 19, 1, 129, 0, 131, 48, 1, 0, 19, 1, 129, 1, 103, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-  let stream = InstructionStream::new(&input);
+  let stream = DecodingStream::new(&input);
 
   let instructions = stream.collect::<Vec<Instruction>>();
 
@@ -537,7 +750,7 @@ pub fn test_stream_decoding_add() {
 pub fn test_instruction_decoding() {
 
   fn decode_test(bytes: &[u8], expected: Instruction) {
-    let mut stream = InstructionStream::new(bytes);
+    let mut stream = DecodingStream::new(bytes);
     let actual = stream.next().unwrap();
     assert_eq!(actual, expected);
   }
@@ -649,4 +862,50 @@ pub fn test_instruction_decoding() {
   decode_test(&[99, 4, 101, 0],   Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8});
   decode_test(&[0x83, 0x21, 0x72, 0x03], Instruction::I { opcode: Opcode::Load(LoadWidth::Word), imm: 55, rs1: Register::ThreadPointer, rd: Register::GlobalPointer });
   decode_test(&[35, 48, 81, 0], Instruction::S { opcode: Opcode::Store(StoreWidth::DoubleWord), rs2: Register::T0, rs1: Register::StackPointer, imm: 0 });
+}
+
+pub struct EncodingStream {
+  bytes: Vec<u8>
+}
+
+impl EncodingStream {
+  pub fn new() -> Self {
+    Self { 
+      bytes: Vec::new()
+    }
+  }
+
+  pub fn push(&mut self, instruction: Instruction) {
+    self.bytes.append(&mut instruction.bytes());
+  }
+
+  pub fn bytes(&self) -> &[u8] {
+    &self.bytes
+  }
+}
+
+#[test]
+pub fn test_instruction_roundtrip() {
+
+  fn roundtrip_test(input: &[u8]) {
+    let mut stream = DecodingStream::new(input);
+    let instruction = stream.next().unwrap();
+
+    let mut stream = EncodingStream::new();
+    stream.push(instruction);
+
+    let output = stream.bytes();
+    assert_eq!(output, input);
+  }
+
+  roundtrip_test(&[183, 2, 1, 0]);
+  roundtrip_test(&[147, 130, 2, 24]);
+  roundtrip_test(&[19, 5, 0, 0]);
+  roundtrip_test(&[147, 8, 96, 13]);
+  roundtrip_test(&[0x93, 0x87, 0xe0, 0xFC]);
+  roundtrip_test(&[115, 0, 0, 0]);
+  roundtrip_test(&[239, 0, 64, 15]);
+  roundtrip_test(&[99, 4, 101, 0]);
+  roundtrip_test(&[0x83, 0x21, 0x72, 0x03]);
+  roundtrip_test(&[35, 48, 81, 0]);
 }
