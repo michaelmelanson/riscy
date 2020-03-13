@@ -123,7 +123,15 @@ impl Opcode {
       Opcode::Branch(function) => function.to_func3(),
       Opcode::System(_) => 0,
 
-      _ => unimplemented!("opcode {:?} does not have funct field", self)
+      _ => unimplemented!("opcode {:?} does not have funct3 field", self)
+    }
+  }
+
+  pub fn funct7_field(&self) -> i32 {
+    match self {
+      Opcode::Op(function) => function.to_func7(),
+
+      _ => unimplemented!("opcode {:?} does not have funct7 field", self)
     }
   }
 }
@@ -346,6 +354,29 @@ impl OpFunction {
       Self::DIVU => 0b101,
       Self::REM => 0b110,
       Self::REMU => 0b111
+    }
+  }
+
+  pub fn to_func7(&self) -> i32 {
+    match self {
+      Self::ADD => 0b0000000,
+      Self::SUB => 0b0100000,
+      Self::SLL => 0b0000000,
+      Self::SLT => 0b0000000,
+      Self::SLTU => 0b0000000,
+      Self::XOR => 0b0000000,
+      Self::SRL => 0b0000000,
+      Self::SRA => 0b0100000,
+      Self::OR => 0b0000000,
+      Self::AND => 0b0000000,
+      Self::MUL => 0b0000001,
+      Self::MULH => 0b0000001,
+      Self::MULHSU => 0b0000001,
+      Self::MULHU => 0b0000001,
+      Self::DIV => 0b0000001,
+      Self::DIVU => 0b0000001,
+      Self::REM => 0b0000001,
+      Self::REMU => 0b0000001
     }
   }
 }
@@ -605,6 +636,15 @@ impl Instruction {
   pub fn bytes(&self) -> Vec<u8> {
     let encoded = match self {
 
+      Instruction::R { rs2, rs1, rd, opcode } => (
+        (opcode.funct7_field() << 25) |
+        (rs2.encode() << 20) |
+        (rs1.encode() << 15) |
+        (opcode.funct3_field() << 12) |
+        (rd.encode() << 7) |
+        opcode.opcode_field()
+      ),
+
       Instruction::I { imm, rs1, rd, opcode } => {
         let funct3 = opcode.funct3_field();
 
@@ -648,9 +688,7 @@ impl Instruction {
         (((imm >> 12) & 0b11111111) << 12) |
         (rd.encode() << 7) |
         opcode.opcode_field()
-      ),
-
-      _ => unimplemented!("{:?}", self)
+      )
     };
 
     println!("Encoded: {:032b}", encoded);
@@ -862,6 +900,7 @@ pub fn test_instruction_decoding() {
   decode_test(&[99, 4, 101, 0],   Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8});
   decode_test(&[0x83, 0x21, 0x72, 0x03], Instruction::I { opcode: Opcode::Load(LoadWidth::Word), imm: 55, rs1: Register::ThreadPointer, rd: Register::GlobalPointer });
   decode_test(&[35, 48, 81, 0], Instruction::S { opcode: Opcode::Store(StoreWidth::DoubleWord), rs2: Register::T0, rs1: Register::StackPointer, imm: 0 });
+  decode_test(&[179, 130, 98, 64], Instruction::R { opcode: Opcode::Op(OpFunction::SUB), rs1: Register::T0, rs2: Register::T1, rd: Register::T0 });
 }
 
 pub struct EncodingStream {
@@ -908,4 +947,5 @@ pub fn test_instruction_roundtrip() {
   roundtrip_test(&[99, 4, 101, 0]);
   roundtrip_test(&[0x83, 0x21, 0x72, 0x03]);
   roundtrip_test(&[35, 48, 81, 0]);
+  roundtrip_test(&[179, 130, 98, 64]);
 }
