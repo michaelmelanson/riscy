@@ -69,6 +69,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "corona-emulator"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "corona-riscv",
+ "goblin",
+ "memmap",
+]
+
+[[package]]
 name = "corona-riscv"
 version = "0.1.0"
 dependencies = [
@@ -108,6 +118,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b6052be84e6b71ab17edffc2eeabf5c2c3ae1fdb464aae35ac50c67a44e1f7"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "memmap"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]

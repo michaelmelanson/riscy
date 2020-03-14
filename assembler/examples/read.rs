@@ -12,7 +12,6 @@ fn main() {
         let header_bytes = &bytes[ph.file_range()];
         println!("Bytes: {:?}", header_bytes);
       }
-
     },
     Err(_) => ()
   }

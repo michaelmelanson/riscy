@@ -1,7 +1,7 @@
 use std::io::Cursor;
 use byteorder::{LittleEndian, ReadBytesExt};
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum Opcode {
   Load(LoadWidth),
@@ -136,7 +136,7 @@ impl Opcode {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Register {
   Zero,  
   ReturnAddress,                  
@@ -239,6 +239,7 @@ impl Register {
   }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum FPRegister {
   FS0, FS1, FS2, FS3, FS4, FS5,   // f0-15 (FP saved registers)
   FS6, FS7, FS8, FS9, FS10, FS11,
@@ -249,7 +250,7 @@ pub enum FPRegister {
   FT0, FT1, FT2, FT3, FT4, FT5    // ft0-5 (FP temporaries)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OpImmFunction {
   ADD,
   SLT,
@@ -285,7 +286,7 @@ impl OpImmFunction {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OpFunction {
   ADD,
   SUB,
@@ -381,7 +382,7 @@ impl OpFunction {
   }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SystemFunction {
   ECALL,
   EBREAK,
@@ -398,7 +399,7 @@ impl SystemFunction {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BranchOperation {
   Equal,
   NotEqual,
@@ -435,7 +436,7 @@ impl BranchOperation {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum LoadWidth {
   Byte,
   HalfWord,
@@ -472,7 +473,7 @@ impl LoadWidth {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum StoreWidth {
   Byte,
   HalfWord,
@@ -503,7 +504,7 @@ impl StoreWidth {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Instruction {
   R { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, rs2: Register /*, funct7: u8 */ },
   I { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: i32 },
@@ -689,6 +690,10 @@ impl Instruction {
     };
 
     encoded.to_le_bytes().to_vec()
+  }
+
+  pub fn width_bytes(&self) -> u64 {
+    4
   }
 }
 
