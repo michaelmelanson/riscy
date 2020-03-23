@@ -3,6 +3,8 @@ use corona_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
 use corona_riscv::isa::{Register};
 
 pub fn run_test_suite(file: &[u8]) {
+  let _ = simple_logger::init();
+
   let binary = goblin::elf::Elf::parse(file).expect("Could not parse file");
   
   let mut memory = MmapMut::map_anon(1024*1024*1024*4).expect("Could not create memory map");
@@ -42,7 +44,8 @@ pub fn run_test_suite(file: &[u8]) {
               println!("Test {} passed!", testnum);
               machine.halt();
             } else {
-              panic!("Test {} failed with a0={}", testnum, a0);
+              let testnum = testnum >> 1;
+              panic!("Test {} failed", testnum);
             }
           },
 

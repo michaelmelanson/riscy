@@ -69,10 +69,12 @@ impl RiscvMachine {
             OpFunction::REMU => lhs.wrapping_rem(rhs),
             OpFunction::SUB  => lhs.wrapping_sub(rhs),
             OpFunction::SLTU => if lhs < rhs { 1 } else { 0 },
+            OpFunction::AND  => lhs & rhs,
 
             _ => unimplemented!("Op function {:?}", function)
           };
 
+          log::warn!("Op: {:#016x} {:?} {:#016x} = {:#016x}", lhs, function, rhs, result);
           registers.set(rd, result as u64);
         },
 
@@ -126,17 +128,19 @@ impl RiscvMachine {
         Opcode::OpImm(function) => {
           let lhs = self.state().registers.get(rs1);
           let rhs = imm as u64;
+          let shamount = rhs as u32 & 0b111111;
 
           let value = match function {
             OpImmFunction::ADDI => lhs.wrapping_add(rhs),
-            OpImmFunction::SLLI => lhs.overflowing_shl(rhs as u32).0,
+            OpImmFunction::SLLI => lhs.overflowing_shl(shamount).0,
+            OpImmFunction::SRLI => lhs.overflowing_shr(shamount).0,
             OpImmFunction::ORI => lhs | rhs,
             OpImmFunction::ANDI => lhs & rhs,
             OpImmFunction::XORI => lhs ^ rhs,
             _ => unimplemented!("OP-Imm function {:?}", function)
           };
 
-          log::trace!("{:#016x}: OpImm: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", pc, lhs, lhs, function, rhs, rhs, value, value);
+          log::debug!("OpImm: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", lhs, lhs, function, rhs, rhs, value, value);
           self.state().registers.set(rd, value);
         },
 
@@ -161,7 +165,7 @@ impl RiscvMachine {
 
             EnvironmentFunction::MRET => {
               let mepc = self.csr.get(CSRRegister::MEPC);
-              log::debug!("MRET returning to {:#16x}", mepc);
+              log::debug!("MRET returning to {:#016x}", mepc);
               self.state().pc = mepc;
             },
 
@@ -217,10 +221,10 @@ impl RiscvMachine {
               self.state().pc.wrapping_sub((-imm) as u64)
             };
 
-            log::trace!("{:#016x}: Branching to {:#08x} on condition ({} {:?} {}) ", pc, target, lhs, operation, rhs);
+            log::trace!("{:#016x}: Branching to {:#08x} on condition ({:#016x} {:?} {:#016x}) ", pc, target, lhs, operation, rhs);
             next_instruction = target;
           } else {
-            log::trace!("{:#016x}: Branch condition ({} {:?} {}) did not match", pc, lhs, operation, rhs);
+            log::trace!("{:#016x}: Branch condition ({:#08x} {:?} {:#08x}) did not match", pc, lhs, operation, rhs);
           }
         },
 
@@ -235,7 +239,9 @@ impl RiscvMachine {
         },
 
         Opcode::Lui => {
-          let value = imm | (self.state().registers.get(rd) & 0xffff) as i32;
+          let prior = self.state().registers.get(rd);
+          let value = imm;
+          log::debug!("Lui: prior={:#016x}, imm={:#016x}, value={:#016x}", prior, imm, value);
           self.state().registers.set(rd, value as u64);
         },
         
@@ -370,6 +376,73 @@ mod tests {
     let actual = machine.load_double_word(0x1000);
 
     assert_eq!(actual, 0x1234567890abcdefu64);
+  }
+
+  #[test]
+  fn test_li() {
+    let mut machine = machine();
+    machine.state().pc = 0x10000;
+    machine.state().registers.set(Register::StackPointer, 0x0);
+    machine.state().registers.set(Register::ReturnAddress, 0x0);
+    machine.state().registers.set(Register::A4, 0xdeadbeefdeadbeef);
+    
+    let expected = {
+      let mut state = machine.state().clone();
+      state.registers.set(Register::StackPointer, 0xffffffffffff8000);
+      state.registers.set(Register::A4, 0xffffffffffff8000);
+      state.pc = 0x10008;
+      state
+    };
+
+    machine.execute_instruction(Instruction::U { 
+      opcode: Opcode::Lui, 
+      rd: Register::StackPointer, 
+      imm: -32768 
+    });
+
+    machine.execute_instruction(Instruction::R { 
+      opcode: Opcode::Op(OpFunction::ADD), 
+      rd: Register::A4, 
+      rs1: Register::ReturnAddress, 
+      rs2: Register::StackPointer 
+    });
+
+    println!("Expected SP: {:#016x}", expected.registers.get(Register::StackPointer));
+    println!("Actual SP:   {:#016x}", machine.state().registers.get(Register::StackPointer));
+
+    println!("Expected A4: {:#016x}", expected.registers.get(Register::A4));
+    println!("Actual A4:   {:#016x}", machine.state().registers.get(Register::A4));
+
+    assert_eq!(*machine.state(), expected);
+
+  }
+
+  #[test]
+  fn test_add() {
+    let mut machine = machine();
+    machine.state().pc = 0x10000;
+    machine.state().registers.set(Register::T0, 0xffffffff80000000);
+    machine.state().registers.set(Register::T1, 0x0000000000007fff);
+    machine.state().registers.set(Register::T2, 0xdeadbeefdeadbeef);
+    
+    let expected = {
+      let mut state = machine.state().clone();
+      state.registers.set(Register::T2, 0xffffffff80007fff);
+      state.pc = 0x10004;
+      state
+    };
+
+    machine.execute_instruction(Instruction::R {
+      opcode: Opcode::Op(OpFunction::ADD),
+      rs1: Register::T0,
+      rs2: Register::T1,
+      rd: Register::T2,
+    });
+
+    println!("Expected T2: {:#016x}", expected.registers.get(Register::T2));
+    println!("Actual T2:   {:#016x}", machine.state().registers.get(Register::T2));
+
+    assert_eq!(*machine.state(), expected);
   }
 
   #[test]
