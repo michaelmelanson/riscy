@@ -70,6 +70,7 @@ impl RiscvMachine {
             OpFunction::SUB  => lhs.wrapping_sub(rhs),
             OpFunction::SLTU => if lhs < rhs { 1 } else { 0 },
             OpFunction::AND  => lhs & rhs,
+            OpFunction::OR   => lhs | rhs,
 
             _ => unimplemented!("Op function {:?}", function)
           };

@@ -51,7 +51,7 @@ deftest_ignore!(lhu);
 deftest_ignore!(lui);
 deftest_ignore!(lw);
 deftest_ignore!(lwu);
-deftest_ignore!(or);
+deftest!(or);
 deftest!(ori);
 deftest_ignore!(sb);
 deftest_ignore!(sd);
