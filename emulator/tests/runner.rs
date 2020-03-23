@@ -8,7 +8,7 @@ pub fn run_test_suite(file: &[u8]) {
   let mut memory = MmapMut::map_anon(1024*1024*1024*4).expect("Could not create memory map");
 
   for ph in binary.program_headers {
-    println!("Loading header: {:?}", ph);
+    // println!("Loading header: {:?}", ph);
     let header_bytes = &file[ph.file_range()];
 
     for (offset, byte) in header_bytes.iter().enumerate() {
@@ -21,8 +21,8 @@ pub fn run_test_suite(file: &[u8]) {
   machine.state().registers.set(Register::StackPointer, 0x1000);
   while !machine.halted() {
     match machine.step() {
-      RiscvMachineStepResult::ExecutedInstruction(instruction) => {
-        println!("Instruction: {:?}", instruction)
+      RiscvMachineStepResult::ExecutedInstruction(_instruction) => {
+        // println!("Instruction: {:?}", instruction)
       },
 
       RiscvMachineStepResult::Trap => {
