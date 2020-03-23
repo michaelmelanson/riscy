@@ -4,21 +4,25 @@ use crate::runner::run_test_suite;
 
 macro_rules! deftest {
   ($name: ident) => {
-    #[test]
-    fn $name() {
-      let file = include_bytes!(concat!("/opt/riscv/target/share/riscv-tests/isa/rv64ui-p-", stringify!($name)));
-      run_test_suite(file)
+    paste::item! {
+      #[test]
+      fn [<rv64ui_p_ $name>] () {
+        let file = include_bytes!(concat!("/opt/riscv/target/share/riscv-tests/isa/rv64ui-p-", stringify!($name)));
+        run_test_suite(file)
+      }
     }
   }
 }
 
 macro_rules! deftest_ignore {
   ($name: ident) => {
-    #[test]
-    #[ignore]
-    fn $name() {
-      let file = include_bytes!(concat!("/opt/riscv/target/share/riscv-tests/isa/rv64ui-p-", stringify!($name)));
-      run_test_suite(file)
+    paste::item! {
+      #[test]
+      #[ignore]
+      fn [<rv64ui_p_ $name>] () {
+        let file = include_bytes!(concat!("/opt/riscv/target/share/riscv-tests/isa/rv64ui-p-", stringify!($name)));
+        run_test_suite(file)
+      }
     }
   }
 }
