@@ -1,12 +1,23 @@
-
 int fib(int x) {
-  if (x <= 1) {
-    return 1;
+  int first;
+  int second;
+  int result;
+
+  if (x == 0) {
+    result = 0;
+  } else if (x == 1) {
+    result = 1;
+  } else {
+    first = fib(x-2);
+    second = fib(x-1);
+    result = first + second;
   }
 
-  return fib(x-2) + fib(x-1);
+  return result;
 }
 
 int main(int argc, char **argv) {
-  return fib(argc);
+  int result;
+  result = fib(1);
+  return result;
 }

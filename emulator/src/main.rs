@@ -1,26 +1,39 @@
-mod machine;
-mod syscall;
 
 use clap::{App, Arg};
 use memmap::MmapMut;
-use machine::{RiscvMachineStepResult, RiscvMachine};
-use syscall::SystemCall;
-use corona_riscv::isa::Register;
+use corona_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
+use corona_emulator::syscall::SystemCall;
+use corona_riscv::isa::{Register};
 
 fn main() {
   let matches = App::new("corona-emulator")
     .version("1.0")
     .author("Michael Melanson <michael@michaelmelanson.net>")
     .about("RISC-V emulator")
+
     .arg(Arg::with_name("FILE")
       .help("A RISC-V binary to run")
       .required(true)
       .takes_value(true)
       .index(1))
+
     .arg(Arg::with_name("MEMORY")
       .help("Size of memory (in megabytes)")
       .default_value("128"))
+    
+    .arg(Arg::with_name("LOG_LEVEL")
+      .short("d")
+      .long("log-level")
+      .help("Sets the logging level")
+      .possible_values(&["trace", "debug", "info", "warn", "error"])
+      .default_value("info"))
+
     .get_matches();
+
+  std::env::set_var("RUST_LOG", matches.value_of("LOG_LEVEL").expect("LOG_LEVEL"));
+  pretty_env_logger::init();
+
+  log::info!("Starting up!");
 
   let memory_size_mb = matches.value_of("MEMORY")
     .expect("No value for MEMORY");
@@ -49,7 +62,7 @@ fn main() {
       RiscvMachineStepResult::ExecutedInstruction(_instruction) => {},
 
       RiscvMachineStepResult::Trap => {
-        println!("Trap!")
+        log::error!("It's a trap!")
       },
 
       RiscvMachineStepResult::SystemCall => {
@@ -62,22 +75,22 @@ fn main() {
                               && program_break % 4 == 0;
 
             if is_valid {
-              println!("Updating program break from {:#08x} to {:#08x}", prior_program_break, program_break);
+              log::debug!("Updating program break from {:#08x} to {:#08x}", prior_program_break, program_break);
               machine.state().program_break = program_break;
             } else {
-              println!("Returning program break of {:#08x}", prior_program_break);
+              log::debug!("Returning program break of {:#08x}", prior_program_break);
               machine.state().registers.set(Register::A0, prior_program_break);
             }
           },
 
           SystemCall::Exit { return_code } => {
-            println!("Exited with code {}", return_code);
+            log::info!("Exited with code {}", return_code);
             machine.halt()
           },
 
           SystemCall::Unknown(id) => panic!("Unknown system call: {:?}", id)
         }
-      }
-    }
+      },
+    };
   }
 }

@@ -7,10 +7,10 @@ pub enum Opcode {
   Load(LoadWidth),
   LoadFp,
   Custom0,
-  MiscMem,
+  MiscMem(MiscMemFunction),
   OpImm(OpImmFunction),
   AuiPc,
-  OpImm32,
+  OpImm32(OpImm32Function),
 
   Store(StoreWidth),
   StoreFp,
@@ -45,10 +45,10 @@ impl Opcode {
       0b0000011 => Opcode::Load(LoadWidth::from_func3(func3)),
       0b0000111 => Opcode::LoadFp,
       0b0001011 => Opcode::Custom0,
-      0b0001111 => Opcode::MiscMem,
+      0b0001111 => Opcode::MiscMem(MiscMemFunction::from_func3(func3)),
       0b0010011 => Opcode::OpImm(OpImmFunction::from_func3(func3)),
       0b0010111 => Opcode::AuiPc,
-      0b0011011 => Opcode::OpImm32,
+      0b0011011 => Opcode::OpImm32(OpImm32Function::from_func3_imm(func3, imm11_0)),
 
       0b0100011 => Opcode::Store(StoreWidth::from_func3(func3)),
       0b0100111 => Opcode::StoreFp,
@@ -70,7 +70,7 @@ impl Opcode {
       0b1100111 => Opcode::JAlr,
       0b1101011 => Opcode::Reserved1,
       0b1101111 => Opcode::JAl,
-      0b1110011 => Opcode::System(SystemFunction::from_imm(imm11_0)),
+      0b1110011 => Opcode::System(SystemFunction::from_func3_imm11_0(func3, imm11_0)),
       0b1110111 => Opcode::Reserved2,
       0b1111011 => Opcode::Custom3,
 
@@ -83,10 +83,10 @@ impl Opcode {
       Opcode::Load(_) => 0b0000011,
       Opcode::LoadFp => 0b0000111, 
       Opcode::Custom0 => 0b0001011, 
-      Opcode::MiscMem => 0b0001111, 
+      Opcode::MiscMem(_) => 0b0001111, 
       Opcode::OpImm(_) => 0b0010011, 
       Opcode::AuiPc => 0b0010111, 
-      Opcode::OpImm32 => 0b0011011, 
+      Opcode::OpImm32(_) => 0b0011011, 
 
       Opcode::Store(_) => 0b0100011, 
       Opcode::StoreFp => 0b0100111, 
@@ -190,9 +190,9 @@ impl Register {
       28 => Register::T3, 
       29 => Register::T4, 
       30 => Register::T5,
-      32 => Register::T6,                  
+      31 => Register::T6,                  
 
-      _ => unimplemented!()
+      _ => unimplemented!("register {}", value)
     }
   }
   pub fn encode(&self) -> i32 {
@@ -251,40 +251,105 @@ pub enum FPRegister {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum OpImmFunction {
-  ADD,
-  SLT,
-  SLTU,
-  XOR,
-  OR,
-  AND,
+pub enum MiscMemFunction {
+  FENCE,
 }
 
-impl OpImmFunction {
-  pub fn from_func3(value: u8) -> Self {
-    match value {
-      0b000 => OpImmFunction::ADD,
-      0b010 => OpImmFunction::SLT,
-      0b011 => OpImmFunction::SLTU,
-      0b110 => OpImmFunction::OR,
-      0b111 => OpImmFunction::AND,
+impl MiscMemFunction {
+  pub fn from_func3(func3: u8) -> Self {
+    match func3 {
+      0b000 => MiscMemFunction::FENCE,
 
-      _ => unimplemented!()
+      _ => unimplemented!("MISC-MEM for func3={:#03b}", func3)
     }
   }
 
   pub fn to_func3(&self) -> i32 {
     match self {
-      OpImmFunction::ADD => 0b000,
-      OpImmFunction::SLT => 0b010,
-      OpImmFunction::SLTU => 0b011,
-      OpImmFunction::OR => 0b110,
-      OpImmFunction::AND => 0b111,
-
-      _ => unimplemented!("funct3 not defined for {:?}", self)
+      MiscMemFunction::FENCE  => 0b000,
     }
   }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum OpImmFunction {
+  ADDI,
+  SLTI,
+  SLTIU,
+
+  ANDI,
+  ORI,
+  XORI,
+
+  SLLI,
+  SRLI,
+  SRAI,
+}
+
+impl OpImmFunction {
+  pub fn from_func3(func3: u8) -> Self {
+    match func3 {
+      0b000 => OpImmFunction::ADDI,
+      0b010 => OpImmFunction::SLTI,
+      0b011 => OpImmFunction::SLTIU,
+      0b100 => OpImmFunction::XORI,
+      0b110 => OpImmFunction::ORI,
+      0b111 => OpImmFunction::ANDI,
+
+      0b001 => OpImmFunction::SLLI,
+      0b101 => OpImmFunction::SRLI,
+      0b101 => OpImmFunction::SRAI,
+
+      _ => unimplemented!("OP-IMM for func3={:#03b}", func3)
+    }
+  }
+
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      OpImmFunction::ADDI  => 0b000,
+      OpImmFunction::SLTI  => 0b010,
+      OpImmFunction::SLTIU => 0b011,
+      OpImmFunction::XORI  => 0b100,
+      OpImmFunction::ORI   => 0b110,
+      OpImmFunction::ANDI  => 0b111,
+
+      OpImmFunction::SLLI => 0b001,
+      OpImmFunction::SRLI => 0b101,
+      OpImmFunction::SRAI => 0b101,
+    }
+  }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum OpImm32Function {
+  ADDIW,
+  SLLIW,
+  SRLIW,
+  SRAIW,
+}
+
+impl OpImm32Function {
+  pub fn from_func3_imm(func3: u8, imm11_0: u16) -> Self {
+    match (func3, imm11_0 >> 5) {
+      (0b000, _) => OpImm32Function::ADDIW,
+      (0b001, high) if high == 0b0000000 => OpImm32Function::SLLIW,
+      (0b101, high) if high == 0b0000000 => OpImm32Function::SRLIW,
+      (0b101, high) if high == 0b0100000 => OpImm32Function::SRAIW,
+
+      _ => unimplemented!("OP-IMM with func3={:#03b}, imm11_0={:#08x}", func3, imm11_0)
+    }
+  }
+
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      OpImm32Function::ADDIW => 0b000,
+      OpImm32Function::SLLIW => 0b001,
+      OpImm32Function::SRLIW => 0b101,
+      OpImm32Function::SRAIW => 0b101,
+    }
+  }
+}
+
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OpFunction {
@@ -384,16 +449,70 @@ impl OpFunction {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SystemFunction {
-  ECALL,
-  EBREAK,
+  // base
+  Environment(EnvironmentFunction),
+
+  //Zicsr
+  CSR(CSRFunction),
 }
 
 impl SystemFunction {
-  pub fn from_imm(imm11_0: u16) -> Self {
+  pub fn from_func3_imm11_0(func3: u8, imm11_0: u16) -> Self {
+    match func3 {
+      0 => SystemFunction::Environment(EnvironmentFunction::from_imm11_0(imm11_0)),
+      0b001 | 0b010 | 0b011 | 0b101 | 0b110 | 0b111 => SystemFunction::CSR(CSRFunction::from_func3(func3)),
+
+      _ => unimplemented!("system function {:#04x}", func3)
+    }
+  }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum EnvironmentFunction {
+  ECALL,
+  EBREAK,
+
+  URET,
+  SRET,
+  MRET,
+}
+
+impl EnvironmentFunction {
+  pub fn from_imm11_0(imm11_0: u16) -> Self {
     match imm11_0 {
-      0 => SystemFunction::ECALL,
-      1 => SystemFunction::EBREAK,
-      _ => unimplemented!()
+      0b000000000000 => EnvironmentFunction::ECALL,
+      0b000000000001 => EnvironmentFunction::EBREAK,
+
+      0b000000000010 => EnvironmentFunction::URET,
+      0b000100000010 => EnvironmentFunction::SRET,
+      0b001100000010 => EnvironmentFunction::MRET,
+
+      _ => unimplemented!("environment function {:#012b}", imm11_0)
+    }
+  }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum CSRFunction {
+  CSRRW,
+  CSRRS,
+  CSRRC,
+  CSRRWI,
+  CSRRSI,
+  CSRRCI
+}
+
+impl CSRFunction {
+  pub fn from_func3(func3: u8) -> Self {
+    match func3 {
+      0b001 => CSRFunction::CSRRW,
+      0b010 => CSRFunction::CSRRS,
+      0b011 => CSRFunction::CSRRC,
+      0b101 => CSRFunction::CSRRWI,
+      0b110 => CSRFunction::CSRRSI,
+      0b111 => CSRFunction::CSRRCI,
+
+      _ => unimplemented!("csr function {:#03b}", func3)
     }
   }
 }
@@ -601,7 +720,7 @@ impl Instruction {
     let from_j_type = |opcode| {
       let imm11 = (encoded >> 20) & 0b1;
 
-      let imm = (if sign_bit > 0 { 0b11111111111 << 20 } else { 0 })
+      let imm = (if sign_bit > 0 { 0b111111111111 << 20 } else { 0 })
                    | (imm19_12 << 12)
                    | (imm11 << 11)
                    | (imm10_1 << 1);
@@ -622,8 +741,10 @@ impl Instruction {
       Opcode::Load(_)   => from_i_type(opcode),
       Opcode::Store(_)  => from_s_type(opcode),
       Opcode::OpImm(_)  => from_i_type(opcode),
+      Opcode::OpImm32(_) => from_i_type(opcode),
       Opcode::Op(_)     => from_r_type(opcode),
       Opcode::System(_) => from_i_type(opcode),
+      Opcode::MiscMem(_) => from_i_type(opcode),
 
       _ => unimplemented!("opcode {:?}", opcode)
     };
@@ -881,11 +1002,11 @@ pub fn test_instruction_decoding() {
   */
 
   decode_test(&[183, 2, 1, 0],    Instruction::U { opcode: Opcode::Lui, imm: 0x10000, rd: Register::T0});
-  decode_test(&[147, 130, 2, 24], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::T0, rs1: Register::T0, imm: 384 });
-  decode_test(&[19, 5, 0, 0],     Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::A0, rs1: Register::Zero, imm: 0 });
-  decode_test(&[147, 8, 96, 13],  Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::A7, rs1: Register::Zero, imm: 214 });
-  decode_test(&[0x93, 0x87, 0xe0, 0xFC], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADD), rd: Register::A5, rs1: Register::ReturnAddress, imm: -50 });
-  decode_test(&[115, 0, 0, 0],    Instruction::I { opcode: Opcode::System(SystemFunction::ECALL), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
+  decode_test(&[147, 130, 2, 24], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::T0, rs1: Register::T0, imm: 384 });
+  decode_test(&[19, 5, 0, 0],     Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A0, rs1: Register::Zero, imm: 0 });
+  decode_test(&[147, 8, 96, 13],  Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A7, rs1: Register::Zero, imm: 214 });
+  decode_test(&[0x93, 0x87, 0xe0, 0xFC], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A5, rs1: Register::ReturnAddress, imm: -50 });
+  decode_test(&[115, 0, 0, 0],    Instruction::I { opcode: Opcode::System(SystemFunction::Environment(EnvironmentFunction::ECALL)), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
   decode_test(&[239, 0, 64, 15],  Instruction::J { opcode: Opcode::JAl, rd: Register::ReturnAddress, imm: 122});
   decode_test(&[99, 4, 101, 0],   Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8});
   decode_test(&[0x83, 0x21, 0x72, 0x03], Instruction::I { opcode: Opcode::Load(LoadWidth::Word), imm: 55, rs1: Register::ThreadPointer, rd: Register::GlobalPointer });
