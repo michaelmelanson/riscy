@@ -1,5 +1,5 @@
 # riscy  
-![Build](https://github.com/michaelmelanson/riscy/workflows/Rust/badge.svg)
+![Build](https://github.com/michaelmelanson/riscy/workflows/Build/badge.svg)
 
 A software implementation of a RISC-V computer.
 
