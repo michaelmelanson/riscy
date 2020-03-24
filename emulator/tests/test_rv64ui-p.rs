@@ -7,7 +7,7 @@ macro_rules! deftest {
     paste::item! {
       #[test]
       fn [<rv64ui_p_ $name>] () {
-        let file = include_bytes!(concat!("/opt/riscv/target/share/riscv-tests/isa/rv64ui-p-", stringify!($name)));
+        let file = include_bytes!(concat!("riscv-tests/isa/rv64ui-p-", stringify!($name)));
         run_test_suite(file)
       }
     }
