@@ -13,6 +13,11 @@ This repository contains the `riscv-tests` compliance test suite from https://gi
 of them. See [emulator/tests/test_rv64ui-p.rs](https://github.com/michaelmelanson/riscy/blob/master/emulator/tests/test_rv64ui-p.rs#L30)
 for details about which ones are currently supported.
 
+| Instruction Set | Test suites passing |
+|-|-|
+| RV64I Base instruction set              | 30 / 50 test suites  **60%** |
+| RV64M Integer multiplication & division | 0 / 50 test suites   **0%**  |
+
 ### Selfie compatibility
 
 _tl;dr_ super rudimentary
