@@ -69,6 +69,7 @@ impl RiscvMachine {
             OpFunction::REMU => lhs.wrapping_rem(rhs),
             OpFunction::SUB  => lhs.wrapping_sub(rhs),
             OpFunction::MUL  => lhs.wrapping_mul(rhs),
+            OpFunction::SLT  => if (lhs as i64) < (rhs as i64) { 1 } else { 0 },
             OpFunction::SLTU => if lhs < rhs { 1 } else { 0 },
             OpFunction::AND  => lhs & rhs,
             OpFunction::OR   => lhs | rhs,
@@ -79,7 +80,7 @@ impl RiscvMachine {
             _ => unimplemented!("Op function {:?}", function)
           };
 
-          log::warn!("Op: {:#016x} ({}) {:?} {:#016x} ({}) = {:#016x} ({})", lhs, lhs, function, rhs, rhs, result, result);
+          log::debug!("Op: {:#016x} ({}) {:?} {:#016x} ({}) = {:#016x} ({})", lhs, lhs, function, rhs, rhs, result, result);
           registers.set(rd, result as u64);
         },
 
@@ -145,7 +146,7 @@ impl RiscvMachine {
             _ => unimplemented!("OP-Imm function {:?}", function)
           };
 
-          log::debug!("OpImm: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, value, value as i64);
+          log::debug!("OpImm: {:#016x} ({}) {:?} {:#016x} ({}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, value, value as i64);
           self.state().registers.set(rd, value);
         },
 
@@ -213,7 +214,7 @@ impl RiscvMachine {
           let matches = match operation {
             BranchOperation::Equal => lhs == rhs,
             BranchOperation::NotEqual => lhs != rhs,
-            BranchOperation::GreaterOrEqual => lhs as i64 >= rhs as i64,
+            BranchOperation::GreaterOrEqual => (lhs as i64) >= (rhs as i64),
             BranchOperation::GreaterOrEqualUnsigned => lhs >= rhs,
             BranchOperation::LessThan => (lhs as i64) < (rhs as i64),
             BranchOperation::LessThanUnsigned => lhs < rhs
@@ -268,7 +269,7 @@ impl RiscvMachine {
             pc.wrapping_add(offset as u64)
           };
 
-          log::trace!("{:#016x}: Jumping to {:#016x} + {} = {:#016x} with link {:#016x}", pc, pc, offset, target, link);
+          log::debug!("{:#016x}: Jumping to {:#016x} + {} = {:#016x} with link {:#016x}", pc, pc, offset, target, link);
           next_instruction = target;
           state.registers.set(rd, link);
         },
@@ -284,7 +285,7 @@ impl RiscvMachine {
   }
 
   fn store_double_word(&mut self, address: u64, value: u64) {
-    log::trace!("{:#016x}: Writing {:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    log::debug!("{:#016x}: Writing {:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
     self.memory[address as usize + 0] = (value >> 56) as u8;
     self.memory[address as usize + 1] = (value >> 48) as u8;
     self.memory[address as usize + 2] = (value >> 40) as u8;
@@ -305,7 +306,7 @@ impl RiscvMachine {
                    | (self.memory[address as usize + 6] as u64) << 8
                    | (self.memory[address as usize + 7] as u64) << 0;
 
-    log::trace!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+    log::debug!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value
   }
