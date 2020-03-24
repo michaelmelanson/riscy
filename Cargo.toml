@@ -1,6 +1,6 @@
 [workspace]
 
 members = [
-  "riscv_emulator",
-  "riscv_isa"
+  "emulator",
+  "isa"
 ]

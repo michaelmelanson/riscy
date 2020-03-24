@@ -300,7 +300,6 @@ impl OpImmFunction {
 
       0b001 => OpImmFunction::SLLI,
       0b101 => OpImmFunction::SRLI,
-      0b101 => OpImmFunction::SRAI,
 
       _ => unimplemented!("OP-IMM for func3={:#03b}", func3)
     }

@@ -1,6 +1,6 @@
 use memmap::MmapMut;
-use riscv_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
-use riscv_isa::{Register};
+use riscy_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
+use riscy_isa::{Register};
 
 pub fn run_test_suite(file: &[u8]) {
   let _ = simple_logger::init();

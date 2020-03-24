@@ -1,9 +1,9 @@
 
 use clap::{App, Arg};
 use memmap::MmapMut;
-use riscv_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
-use riscv_emulator::syscall::SystemCall;
-use riscv_isa::{Register};
+use riscy_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
+use riscy_emulator::syscall::SystemCall;
+use riscy_isa::{Register};
 
 fn main() {
   let matches = App::new("riscv-emulator")

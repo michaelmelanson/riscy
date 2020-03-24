@@ -1,6 +1,6 @@
 
 use crate::machine::RiscvRegisters;
-use riscv_isa::Register;
+use riscy_isa::Register;
 
 #[derive(Debug)]
 pub enum SystemCall {

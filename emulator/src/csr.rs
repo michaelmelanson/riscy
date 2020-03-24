@@ -1,6 +1,6 @@
 
 use crate::machine::RiscvMachineContext;
-use riscv_isa::{
+use riscy_isa::{
   Register,
   CSRFunction
 };
