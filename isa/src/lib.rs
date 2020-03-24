@@ -48,7 +48,7 @@ impl Opcode {
       0b0000111 => Opcode::LoadFp,
       0b0001011 => Opcode::Custom0,
       0b0001111 => Opcode::MiscMem(MiscMemFunction::from_func3(func3)),
-      0b0010011 => Opcode::OpImm(OpImmFunction::from_func3(func3)),
+      0b0010011 => Opcode::OpImm(OpImmFunction::from_imm11_0_func3(imm11_0, func3)),
       0b0010111 => Opcode::AuiPc,
       0b0011011 => Opcode::OpImm32(OpImm32Function::from_func3_imm(func3, imm11_0)),
 
@@ -289,7 +289,7 @@ pub enum OpImmFunction {
 }
 
 impl OpImmFunction {
-  pub fn from_func3(func3: u8) -> Self {
+  pub fn from_imm11_0_func3(imm11_0: u16, func3: u8) -> Self {
     match func3 {
       0b000 => OpImmFunction::ADDI,
       0b010 => OpImmFunction::SLTI,
@@ -299,7 +299,8 @@ impl OpImmFunction {
       0b111 => OpImmFunction::ANDI,
 
       0b001 => OpImmFunction::SLLI,
-      0b101 => OpImmFunction::SRLI,
+      0b101 if imm11_0 & 0b111111000000 == 0 => OpImmFunction::SRLI,
+      0b101 => OpImmFunction::SRAI,
 
       _ => unimplemented!("OP-IMM for func3={:#03b}", func3)
     }

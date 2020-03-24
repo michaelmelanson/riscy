@@ -66,7 +66,7 @@ deftest!(slti);
 deftest_ignore!(sltiu);
 deftest!(sltu);
 deftest!(sra);
-deftest_ignore!(srai);
+deftest!(srai);
 deftest!(sraiw);
 deftest_ignore!(sraw);
 deftest!(srl);
