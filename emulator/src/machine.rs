@@ -68,14 +68,18 @@ impl RiscvMachine {
             OpFunction::ADD  => lhs.wrapping_add(rhs),
             OpFunction::REMU => lhs.wrapping_rem(rhs),
             OpFunction::SUB  => lhs.wrapping_sub(rhs),
+            OpFunction::MUL  => lhs.wrapping_mul(rhs),
             OpFunction::SLTU => if lhs < rhs { 1 } else { 0 },
             OpFunction::AND  => lhs & rhs,
             OpFunction::OR   => lhs | rhs,
+            OpFunction::XOR  => lhs ^ rhs,
+            OpFunction::SLL  => lhs.overflowing_shl(rhs as u32).0,
+            OpFunction::SRL  => lhs.overflowing_shr(rhs as u32).0,
 
             _ => unimplemented!("Op function {:?}", function)
           };
 
-          log::warn!("Op: {:#016x} {:?} {:#016x} = {:#016x}", lhs, function, rhs, result);
+          log::warn!("Op: {:#016x} ({}) {:?} {:#016x} ({}) = {:#016x} ({})", lhs, lhs, function, rhs, rhs, result, result);
           registers.set(rd, result as u64);
         },
 
@@ -141,7 +145,7 @@ impl RiscvMachine {
             _ => unimplemented!("OP-Imm function {:?}", function)
           };
 
-          log::debug!("OpImm: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", lhs, lhs, function, rhs, rhs, value, value);
+          log::debug!("OpImm: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, value, value as i64);
           self.state().registers.set(rd, value);
         },
 
@@ -209,9 +213,9 @@ impl RiscvMachine {
           let matches = match operation {
             BranchOperation::Equal => lhs == rhs,
             BranchOperation::NotEqual => lhs != rhs,
-            BranchOperation::GreaterOrEqual => lhs >= rhs,
+            BranchOperation::GreaterOrEqual => lhs as i64 >= rhs as i64,
             BranchOperation::GreaterOrEqualUnsigned => lhs >= rhs,
-            BranchOperation::LessThan => lhs < rhs,
+            BranchOperation::LessThan => (lhs as i64) < (rhs as i64),
             BranchOperation::LessThanUnsigned => lhs < rhs
           };
 
@@ -234,8 +238,10 @@ impl RiscvMachine {
 
       Instruction::U { imm, rd, opcode } => match opcode {
         Opcode::AuiPc => {
-          let lower = self.state().registers.get(rd) as u32 & 0b111111111111;
-          let value = imm as u32 | lower;
+          let pc = self.state().pc as u64;
+          let offset = imm as u64;
+          let value = pc.wrapping_add(offset);
+          log::debug!("AUIPC: pc={:#016x}, imm={:#016x}, offset={:#016x}, value={:#016x}", pc, imm, offset, value);
           self.state().registers.set(rd, value as u64);
         },
 
@@ -262,7 +268,7 @@ impl RiscvMachine {
             pc.wrapping_add(offset as u64)
           };
 
-          log::trace!("{:#016x}: Jumping to {:#08x} + {} = {:#08x} with link {:#08x}", pc, target, offset, target, link);
+          log::trace!("{:#016x}: Jumping to {:#016x} + {} = {:#016x} with link {:#016x}", pc, pc, offset, target, link);
           next_instruction = target;
           state.registers.set(rd, link);
         },
