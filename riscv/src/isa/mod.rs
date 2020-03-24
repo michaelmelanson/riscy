@@ -681,7 +681,9 @@ impl Instruction {
     };
 
     let from_s_type = |opcode| {
-      let imm = (imm11_5 << 5) | imm4_0;
+      let imm = (if sign_bit > 0 { 0b11111111111111111111 << 12 } else { 0 }) 
+                   | (imm11_5 << 5) 
+                   | imm4_0;
 
       Instruction::S { 
         opcode, 

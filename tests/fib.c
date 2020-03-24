@@ -18,6 +18,6 @@ int fib(int x) {
 
 int main(int argc, char **argv) {
   int result;
-  result = fib(1);
+  result = fib(10);
   return result;
 }

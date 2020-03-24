@@ -193,7 +193,12 @@ impl RiscvMachine {
 
           match width {
             StoreWidth::DoubleWord => {
-              let effective_address = registers.get(rs1) + imm as u64;
+              let base_address = registers.get(rs1);
+              let effective_address = if imm > 0 {
+                base_address.wrapping_add((imm) as u64)
+              } else {
+                base_address.wrapping_sub((-imm) as u64)
+              };
               let value = registers.get(rs2);
               self.store_double_word(effective_address, value);
             },
@@ -227,7 +232,7 @@ impl RiscvMachine {
               self.state().pc.wrapping_sub((-imm) as u64)
             };
 
-            log::trace!("{:#016x}: Branching to {:#08x} on condition ({:#016x} {:?} {:#016x}) ", pc, target, lhs, operation, rhs);
+            log::trace!("{:#016x}: Branching to {:#016x} on condition ({:#016x} {:?} {:#016x}) ", pc, target, lhs, operation, rhs);
             next_instruction = target;
           } else {
             log::trace!("{:#016x}: Branch condition ({:#08x} {:?} {:#08x}) did not match", pc, lhs, operation, rhs);
@@ -286,25 +291,25 @@ impl RiscvMachine {
 
   fn store_double_word(&mut self, address: u64, value: u64) {
     log::debug!("{:#016x}: Writing {:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory[address as usize + 0] = (value >> 56) as u8;
-    self.memory[address as usize + 1] = (value >> 48) as u8;
-    self.memory[address as usize + 2] = (value >> 40) as u8;
-    self.memory[address as usize + 3] = (value >> 32) as u8;
-    self.memory[address as usize + 4] = (value >> 24) as u8;
-    self.memory[address as usize + 5] = (value >> 16) as u8;
-    self.memory[address as usize + 6] = (value >> 8) as u8;
-    self.memory[address as usize + 7] = (value >> 0) as u8;
+    self.memory[address as usize + 7] = (value >> 56) as u8;
+    self.memory[address as usize + 6] = (value >> 48) as u8;
+    self.memory[address as usize + 5] = (value >> 40) as u8;
+    self.memory[address as usize + 4] = (value >> 32) as u8;
+    self.memory[address as usize + 3] = (value >> 24) as u8;
+    self.memory[address as usize + 2] = (value >> 16) as u8;
+    self.memory[address as usize + 1] = (value >> 8) as u8;
+    self.memory[address as usize + 0] = (value >> 0) as u8;
   }
 
   fn load_double_word(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 0] as u64) << 56
-                   | (self.memory[address as usize + 1] as u64) << 48
-                   | (self.memory[address as usize + 2] as u64) << 40
-                   | (self.memory[address as usize + 3] as u64) << 32
-                   | (self.memory[address as usize + 4] as u64) << 24
-                   | (self.memory[address as usize + 5] as u64) << 16
-                   | (self.memory[address as usize + 6] as u64) << 8
-                   | (self.memory[address as usize + 7] as u64) << 0;
+    let value = (self.memory[address as usize + 7] as u64) << 56
+                   | (self.memory[address as usize + 6] as u64) << 48
+                   | (self.memory[address as usize + 5] as u64) << 40
+                   | (self.memory[address as usize + 4] as u64) << 32
+                   | (self.memory[address as usize + 3] as u64) << 24
+                   | (self.memory[address as usize + 2] as u64) << 16
+                   | (self.memory[address as usize + 1] as u64) << 8
+                   | (self.memory[address as usize + 0] as u64) << 0;
 
     log::debug!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -366,20 +371,20 @@ mod tests {
     
     machine.store_double_word(0x1000, 0x1234567890abcdefu64);
 
-    assert_eq!(machine.memory[0x1000..=0x1007], [0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef]);
+    assert_eq!(machine.memory[0x1000..=0x1007], [0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12]);
   }
 
   #[test]
   fn test_load_double_word() {
     let mut machine = machine();
-    machine.memory[0x1000] = 0x12;
-    machine.memory[0x1001] = 0x34;
-    machine.memory[0x1002] = 0x56;
-    machine.memory[0x1003] = 0x78;
-    machine.memory[0x1004] = 0x90;
-    machine.memory[0x1005] = 0xab;
-    machine.memory[0x1006] = 0xcd;
-    machine.memory[0x1007] = 0xef;
+    machine.memory[0x1007] = 0x12;
+    machine.memory[0x1006] = 0x34;
+    machine.memory[0x1005] = 0x56;
+    machine.memory[0x1004] = 0x78;
+    machine.memory[0x1003] = 0x90;
+    machine.memory[0x1002] = 0xab;
+    machine.memory[0x1001] = 0xcd;
+    machine.memory[0x1000] = 0xef;
 
     let actual = machine.load_double_word(0x1000);
 
