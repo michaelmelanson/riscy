@@ -76,6 +76,7 @@ impl RiscvMachine {
             OpFunction::XOR  => lhs ^ rhs,
             OpFunction::SLL  => lhs.overflowing_shl(rhs as u32).0,
             OpFunction::SRL  => lhs.overflowing_shr(rhs as u32).0,
+            OpFunction::SRA  => (lhs as i64).overflowing_shr(rhs as u32).0 as u64,
 
             _ => unimplemented!("Op function {:?}", function)
           };
