@@ -160,6 +160,7 @@ impl RiscvMachine {
             OpImmFunction::ADDI => lhs.wrapping_add(rhs),
             OpImmFunction::SLLI => lhs.overflowing_shl(shamount).0,
             OpImmFunction::SRLI => lhs.overflowing_shr(shamount).0,
+            OpImmFunction::SLTI => if (lhs as i64) < (rhs as i64) { 1 } else { 0 },
             OpImmFunction::ORI => lhs | rhs,
             OpImmFunction::ANDI => lhs & rhs,
             OpImmFunction::XORI => lhs ^ rhs,
