@@ -17,7 +17,7 @@ for details about which ones are currently supported.
 |-|-|-|
 | RV64I Base instruction set              | 30 / 50 test suites  **60%** | |
 | RV64M Integer multiplication & division | N/A  | Partial untested support |
-| Zicsr Control & Status Register         | N/A  | Minimal support for MRET |
+| Zicsr Control & Status Register         | N/A  | Minimal support for MRET instruction |
 
 ### Selfie compatibility
 
