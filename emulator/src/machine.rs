@@ -95,8 +95,7 @@ impl RiscvMachine {
             Op32Function::SUBW  => lhs.wrapping_sub(rhs),
             Op32Function::SLLW  => lhs.overflowing_shl(rhs as u32).0,
             Op32Function::SRLW  => lhs.overflowing_shr(rhs as u32).0,
-
-            _ => unimplemented!("OP-32 function {:?}", function)
+            Op32Function::SRAW  => (lhs as i32).overflowing_shr(rhs as u32).0 as u32,
           };
 
           log::debug!("OP-32: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", lhs, lhs, function, rhs, rhs, result, result);
