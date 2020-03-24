@@ -20,7 +20,7 @@ pub enum Opcode {
   Amo,
   Op(OpFunction),
   Lui,
-  Op32,
+  Op32(Op32Function),
 
   MAdd,
   MSub,
@@ -58,7 +58,7 @@ impl Opcode {
       0b0101111 => Opcode::Amo,
       0b0110011 => Opcode::Op(OpFunction::from_func3_func7(func3, func7)),
       0b0110111 => Opcode::Lui,
-      0b0111011 => Opcode::Op32,
+      0b0111011 => Opcode::Op32(Op32Function::from_func3_func7(func3, func7)),
 
       0b1000011 => Opcode::MAdd,
       0b1000111 => Opcode::MSub,
@@ -96,7 +96,7 @@ impl Opcode {
       Opcode::Amo => 0b0101111, 
       Opcode::Op(_) => 0b0110011, 
       Opcode::Lui => 0b0110111, 
-      Opcode::Op32 => 0b0111011, 
+      Opcode::Op32(_) => 0b0111011, 
 
       Opcode::MAdd => 0b1000011, 
       Opcode::MSub => 0b1000111, 
@@ -449,6 +449,49 @@ impl OpFunction {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Op32Function {
+  ADDW,
+  SUBW,
+  SLLW,
+  SRLW,
+  SRAW,
+}
+
+impl Op32Function {
+  pub fn from_func3_func7(func3: u8, func7: u8) -> Self {
+    match (func7, func3) {
+      (0b0000000, 0b000) => Op32Function::ADDW,
+      (0b0100000, 0b000) => Op32Function::SUBW,
+      (0b0000000, 0b001) => Op32Function::SLLW,
+      (0b0000000, 0b101) => Op32Function::SRLW,
+      (0b0100000, 0b101) => Op32Function::SRAW,
+
+      _ => unimplemented!("OP-32 with func7={:#07b}, func3={:#03b}", func7, func3)
+    }
+  }
+  
+  pub fn to_func3(&self) -> i32 {
+    match self {
+      Op32Function::ADDW => 0b000,
+      Op32Function::SUBW => 0b000,
+      Op32Function::SLLW => 0b001,
+      Op32Function::SRLW => 0b101,
+      Op32Function::SRAW => 0b101,
+    }
+  }
+
+  pub fn to_func7(&self) -> i32 {
+    match self {
+      Op32Function::ADDW => 0b0000000,
+      Op32Function::SUBW => 0b0100000,
+      Op32Function::SLLW => 0b0000000,
+      Op32Function::SRLW => 0b0000000,
+      Op32Function::SRAW => 0b0100000,
+    }
+  }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SystemFunction {
   // base
   Environment(EnvironmentFunction),
@@ -746,6 +789,7 @@ impl Instruction {
       Opcode::OpImm(_)  => from_i_type(opcode),
       Opcode::OpImm32(_) => from_i_type(opcode),
       Opcode::Op(_)     => from_r_type(opcode),
+      Opcode::Op32(_)   => from_r_type(opcode),
       Opcode::System(_) => from_i_type(opcode),
       Opcode::MiscMem(_) => from_i_type(opcode),
 

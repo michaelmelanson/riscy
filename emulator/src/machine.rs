@@ -1,6 +1,6 @@
 use crate::csr::CSRIndex;
 use crate::csr::{CSRRegister, CSR};
-use riscy_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction};
+use riscy_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction, Op32Function};
 use std::collections::HashMap;
 use memmap::MmapMut;
 
@@ -84,6 +84,25 @@ impl RiscvMachine {
           registers.set(rd, result as u64);
         },
 
+        Opcode::Op32(function) => {
+          let registers = &mut self.state().registers;
+          let lhs = registers.get(rs1) as i32;
+          let rhs = registers.get(rs2) as i32;
+
+          let result = match function {
+            Op32Function::ADDW  => lhs.wrapping_add(rhs),
+            Op32Function::SUBW  => lhs.wrapping_sub(rhs),
+            Op32Function::SLLW  => lhs.overflowing_shl(rhs as u32).0,
+            Op32Function::SRLW  => lhs.overflowing_shr(rhs as u32).0,
+
+            _ => unimplemented!("Op function {:?}", function)
+          };
+
+          log::debug!("Op: {:#016x} ({}) {:?} {:#016x} ({}) = {:#016x} ({})", lhs, lhs, function, rhs, rhs, result, result);
+          registers.set(rd, result as u64);
+        },
+
+        
         _ => unimplemented!("R-type opcode {:?}", opcode)
       },
       

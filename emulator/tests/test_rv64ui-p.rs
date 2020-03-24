@@ -30,7 +30,7 @@ macro_rules! deftest_ignore {
 deftest!(add);
 deftest!(addi);
 deftest!(addiw);
-deftest_ignore!(addw);
+deftest!(addw);
 deftest!(and);
 deftest!(andi);
 deftest!(auipc);
@@ -60,7 +60,7 @@ deftest!(simple);
 deftest!(sll);
 deftest!(slli);
 deftest!(slliw);
-deftest_ignore!(sllw);
+deftest!(sllw);
 deftest!(slt);
 deftest_ignore!(slti);
 deftest_ignore!(sltiu);
