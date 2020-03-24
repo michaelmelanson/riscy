@@ -1,6 +1,6 @@
 
 use crate::machine::RiscvRegisters;
-use corona_riscv::isa::Register;
+use riscv_isa::Register;
 
 #[derive(Debug)]
 pub enum SystemCall {

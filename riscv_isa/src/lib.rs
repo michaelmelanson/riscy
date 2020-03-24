@@ -1,3 +1,5 @@
+#![feature(leading_trailing_ones)]
+
 use std::io::Cursor;
 use byteorder::{LittleEndian, ReadBytesExt};
 

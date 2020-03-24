@@ -1,6 +1,6 @@
 
 use crate::machine::RiscvMachineContext;
-use corona_riscv::isa::{
+use riscv_isa::{
   Register,
   CSRFunction
 };

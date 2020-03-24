@@ -1,8 +1,6 @@
 [workspace]
 
 members = [
-  "assembler",
-  "compiler",
-  "emulator",
-  "riscv"
+  "riscv_emulator",
+  "riscv_isa"
 ]

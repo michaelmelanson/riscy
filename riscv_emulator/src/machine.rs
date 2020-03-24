@@ -1,6 +1,6 @@
 use crate::csr::CSRIndex;
 use crate::csr::{CSRRegister, CSR};
-use corona_riscv::isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction};
+use riscv_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction};
 use std::collections::HashMap;
 use memmap::MmapMut;
 
@@ -358,7 +358,7 @@ impl RiscvRegisters {
 mod tests {
   use crate::machine::RiscvMachine;
   use memmap::MmapMut;
-  use corona_riscv::isa::{Opcode, Instruction, Register, OpImmFunction, OpFunction};
+  use riscv_isa::{Opcode, Instruction, Register, OpImmFunction, OpFunction};
 
   fn machine() -> RiscvMachine {
     let memory = MmapMut::map_anon(0x100000).expect("Could not create memory map");

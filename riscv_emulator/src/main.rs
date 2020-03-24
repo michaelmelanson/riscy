@@ -1,15 +1,15 @@
 
 use clap::{App, Arg};
 use memmap::MmapMut;
-use corona_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
-use corona_emulator::syscall::SystemCall;
-use corona_riscv::isa::{Register};
+use riscv_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
+use riscv_emulator::syscall::SystemCall;
+use riscv_isa::{Register};
 
 fn main() {
-  let matches = App::new("corona-emulator")
+  let matches = App::new("riscv-emulator")
     .version("1.0")
     .author("Michael Melanson <michael@michaelmelanson.net>")
-    .about("RISC-V emulator")
+    .about("A RISC-V emulator")
 
     .arg(Arg::with_name("FILE")
       .help("A RISC-V binary to run")

@@ -1,6 +1,6 @@
 use memmap::MmapMut;
-use corona_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
-use corona_riscv::isa::{Register};
+use riscv_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
+use riscv_isa::{Register};
 
 pub fn run_test_suite(file: &[u8]) {
   let _ = simple_logger::init();
