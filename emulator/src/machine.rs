@@ -86,8 +86,8 @@ impl RiscvMachine {
 
         Opcode::Op32(function) => {
           let registers = &mut self.state().registers;
-          let lhs = registers.get(rs1) as i32;
-          let rhs = registers.get(rs2) as i32;
+          let lhs = registers.get(rs1) as u32;
+          let rhs = registers.get(rs2) as u32;
 
           let result = match function {
             Op32Function::ADDW  => lhs.wrapping_add(rhs),
@@ -95,11 +95,11 @@ impl RiscvMachine {
             Op32Function::SLLW  => lhs.overflowing_shl(rhs as u32).0,
             Op32Function::SRLW  => lhs.overflowing_shr(rhs as u32).0,
 
-            _ => unimplemented!("Op function {:?}", function)
+            _ => unimplemented!("OP-32 function {:?}", function)
           };
 
-          log::debug!("Op: {:#016x} ({}) {:?} {:#016x} ({}) = {:#016x} ({})", lhs, lhs, function, rhs, rhs, result, result);
-          registers.set(rd, result as u64);
+          log::debug!("OP-32: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", lhs, lhs, function, rhs, rhs, result, result);
+          registers.set(rd, result as i32 as u64); // do u32 -> i32 -> u64 to trigger sign extension
         },
 
         

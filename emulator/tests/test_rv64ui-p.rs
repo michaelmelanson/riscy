@@ -72,7 +72,7 @@ deftest_ignore!(sraw);
 deftest!(srl);
 deftest!(srli);
 deftest_ignore!(srliw);
-deftest_ignore!(srlw);
+deftest!(srlw);
 deftest!(sub);
 deftest_ignore!(subw);
 deftest_ignore!(sw);
