@@ -27,15 +27,15 @@ cargo run -p emulator -- -d debug path/to/binary
 
 ### RISC-V compliance
 
-_tl;dr_ it only wishes it were RISC-V compliant.
+_tl;dr_ it supports the basic instruction set, but it's hopelessly inadequate in every other way.
 
-This repository contains the `riscv-tests` compliance test suite from https://github.com/riscv/riscv-tests and passes a subset
-of them. See [emulator/tests/test_rv64ui-p.rs](https://github.com/michaelmelanson/riscy/blob/master/emulator/tests/test_rv64ui-p.rs#L30)
-for details about which ones are currently supported.
+This repository contains binary versions of the `riscv-tests` test suite from
+https://github.com/riscv/riscv-tests and uses these to test compliance with the 
+RISC-V standard:
 
 | Instruction Set | Test suites passing | Notes |
 |-|-|-|
-| RV64I Base instruction set              | 38 / 51 test suites  **75%** | |
+| RV64I Base instruction set              | **100%** 🎉 | |
 | RV64M Integer multiplication & division | N/A  | Partial untested support |
 | Zicsr Control & Status Register         | N/A  | Minimal support for MRET instruction |
 
