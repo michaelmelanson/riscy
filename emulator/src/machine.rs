@@ -215,20 +215,20 @@ impl RiscvMachine {
       Instruction::S { imm, rs2, rs1, opcode } => match opcode {
         Opcode::Store(width) => {
           let registers = &mut self.state().registers;
+          let base_address = registers.get(rs1);
+          let effective_address = if imm > 0 {
+            base_address.wrapping_add((imm) as u64)
+          } else {
+            base_address.wrapping_sub((-imm) as u64)
+          };
+
+          let value = registers.get(rs2);
 
           match width {
-            StoreWidth::DoubleWord => {
-              let base_address = registers.get(rs1);
-              let effective_address = if imm > 0 {
-                base_address.wrapping_add((imm) as u64)
-              } else {
-                base_address.wrapping_sub((-imm) as u64)
-              };
-              let value = registers.get(rs2);
-              self.store_double_word(effective_address, value);
-            },
-
-            _ => unimplemented!("Store width {:?}", width)
+            StoreWidth::DoubleWord => self.store_double_word(effective_address, value),
+            StoreWidth::Word => self.store_word(effective_address, value),
+            StoreWidth::HalfWord => self.store_halfword(effective_address, value),
+            StoreWidth::Byte => self.store_byte(effective_address, value),
           }
         },
 
@@ -315,7 +315,7 @@ impl RiscvMachine {
   }
 
   fn store_double_word(&mut self, address: u64, value: u64) {
-    log::debug!("{:#016x}: Writing {:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    log::debug!("{:#016x}: Writing double word{:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
     self.memory[address as usize + 7] = (value >> 56) as u8;
     self.memory[address as usize + 6] = (value >> 48) as u8;
     self.memory[address as usize + 5] = (value >> 40) as u8;
@@ -323,6 +323,25 @@ impl RiscvMachine {
     self.memory[address as usize + 3] = (value >> 24) as u8;
     self.memory[address as usize + 2] = (value >> 16) as u8;
     self.memory[address as usize + 1] = (value >> 8) as u8;
+    self.memory[address as usize + 0] = (value >> 0) as u8;
+  }
+
+  fn store_word(&mut self, address: u64, value: u64) {
+    log::debug!("{:#016x}: Writing word {:#08x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    self.memory[address as usize + 3] = (value >> 24) as u8;
+    self.memory[address as usize + 2] = (value >> 16) as u8;
+    self.memory[address as usize + 1] = (value >> 8) as u8;
+    self.memory[address as usize + 0] = (value >> 0) as u8;
+  }
+
+  fn store_halfword(&mut self, address: u64, value: u64) {
+    log::debug!("{:#016x}: Writing half-word {:#04x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    self.memory[address as usize + 1] = (value >> 8) as u8;
+    self.memory[address as usize + 0] = (value >> 0) as u8;
+  }
+
+  fn store_byte(&mut self, address: u64, value: u64) {
+    log::debug!("{:#016x}: Writing byte {:#02x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
     self.memory[address as usize + 0] = (value >> 0) as u8;
   }
 
