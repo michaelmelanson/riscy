@@ -1,11 +1,9 @@
-
 use clap::{App, Arg};
-use memmap::MmapMut;
-use riscy_emulator::machine::{RiscvMachineStepResult, RiscvMachine};
-use riscy_emulator::syscall::SystemCall;
+use riscy_emulator::machine::{RiscvMachine, RiscvMachineError, RiscvMachineStepAction};
+use riscy_emulator::{subsystem::{Subsystem, Selfie}, memory::Memory};
 use riscy_isa::{Register};
 
-fn main() {
+fn main()  -> Result<(), RiscvMachineError> {
   let matches = App::new("riscv-emulator")
     .version("1.0")
     .author("Michael Melanson <michael@michaelmelanson.net>")
@@ -20,6 +18,14 @@ fn main() {
     .arg(Arg::with_name("MEMORY")
       .help("Size of memory (in megabytes)")
       .default_value("128"))
+
+    
+    .arg(Arg::with_name("SUBSYSTEM")
+      .short("s")
+      .long("subsystem")
+      .help("Selects which kind of machine to emulate")
+      .possible_values(&["selfie"])
+      .default_value("selfie"))
     
     .arg(Arg::with_name("LOG_LEVEL")
       .short("d")
@@ -35,14 +41,15 @@ fn main() {
 
   log::info!("Starting up!");
 
-  let memory_size_mb = matches.value_of("MEMORY")
-    .expect("No value for MEMORY");
-  let memory_size_mb = memory_size_mb.parse::<usize>().expect("MEMORY must be a positive number");
+  let memory_size_mb = matches.value_of("MEMORY").expect("No value for MEMORY")
+    .parse::<usize>().expect("MEMORY must be a positive number");
+  let file_path = matches.value_of("FILE").expect("You must give a file to run");
+  let subsystem = matches.value_of("SUBSYSTEM").expect("You must give a SUBSYSTEM");
+
   let memory_size = memory_size_mb*1024*1024;
 
-  let mut memory = MmapMut::map_anon(memory_size).expect("Could not create memory map");
+  let mut memory = Memory::new(memory_size);
 
-  let file_path = matches.value_of("FILE").expect("You must give a file to run");
   let file = std::fs::read(file_path).expect("Could not read file");
   let binary = goblin::elf::Elf::parse(&file).expect("Could not parse file");
   
@@ -51,46 +58,28 @@ fn main() {
 
     for (offset, byte) in header_bytes.iter().enumerate() {
       let address = (ph.p_vaddr as usize) + (offset as usize);
-      memory[address] = *byte;
+      memory.physical()[address] = *byte;
     }
   }
 
-  let mut machine = RiscvMachine::new(memory, binary.header.e_entry);
-  machine.state().registers.set(Register::StackPointer, 0x1000);
-  while !machine.halted() {
-    match machine.step() {
-      RiscvMachineStepResult::ExecutedInstruction(_instruction) => {},
+  match subsystem {
+    "selfie" => run_machine::<Selfie>(memory, binary.header.e_entry),
 
-      RiscvMachineStepResult::Trap => {
-        log::error!("It's a trap!")
-      },
-
-      RiscvMachineStepResult::SystemCall => {
-        let syscall = SystemCall::from_registers(&machine.state().registers);
-        match syscall {
-          SystemCall::Break { program_break } => {
-            let prior_program_break = machine.state().program_break;
-            let is_valid = program_break >= prior_program_break
-                              && program_break < machine.state().registers.get(Register::StackPointer)
-                              && program_break % 4 == 0;
-
-            if is_valid {
-              log::debug!("Updating program break from {:#08x} to {:#08x}", prior_program_break, program_break);
-              machine.state().program_break = program_break;
-            } else {
-              log::debug!("Returning program break of {:#08x}", prior_program_break);
-              machine.state().registers.set(Register::A0, prior_program_break);
-            }
-          },
-
-          SystemCall::Exit { return_code } => {
-            log::info!("Exited with code {}", return_code);
-            machine.halt()
-          },
-
-          SystemCall::Unknown(id) => panic!("Unknown system call: {:?}", id)
-        }
-      },
-    };
+    _ => panic!("Unknown subsystem {}", subsystem)
   }
+}
+
+fn run_machine<S: Subsystem>(memory: Memory, entry: u64) -> Result<(), RiscvMachineError>{
+  let mut machine= RiscvMachine::<S>::new(memory, entry);
+  machine.state_mut().registers.set(Register::StackPointer, 0x1000);
+  while !machine.halted() {
+    match machine.step()? {
+      RiscvMachineStepAction::ExecutedInstruction { instruction: _ } => {},
+      RiscvMachineStepAction::Exit { status_code } => {
+        log::info!("Exited with code {}", status_code);
+        machine.halt()
+      }
+    }
+  }
+  Ok(())
 }

@@ -1,20 +1,35 @@
 use crate::csr::CSRIndex;
 use crate::csr::{CSRRegister, CSR};
+use crate::{memory::Memory, subsystem::{SubsystemError, Subsystem, SubsystemAction}};
 use riscy_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction, Op32Function};
-use std::collections::HashMap;
-use memmap::MmapMut;
+use std::{marker::PhantomData, collections::HashMap};
 
 #[derive(Debug)]
-pub struct RiscvMachine {
-  memory: MmapMut,
+pub enum RiscvMachineError {
+  UnknownSystemCall(u64),
+  Trap
+}
+
+impl From<SubsystemError> for RiscvMachineError {
+  fn from(error: SubsystemError) -> Self { 
+    match error {
+      SubsystemError::UnknownSystemCall(syscall) => RiscvMachineError::UnknownSystemCall(syscall)
+    }
+  }
+}
+
+#[derive(Debug)]
+pub struct RiscvMachine<S: Subsystem> {
+  memory: Memory,
   contexts: HashMap<i32, RiscvMachineContext>,
   current_context: i32,
   halted: bool,
-  csr: CSR
+  csr: CSR,
+  _phantom: PhantomData<S>
 }
 
-impl RiscvMachine {
-  pub fn new(memory: MmapMut, entry: u64) -> Self {
+impl <S: Subsystem> RiscvMachine<S> {
+  pub fn new(memory: Memory, entry: u64) -> Self {
     let mut contexts = HashMap::new();
     contexts.insert(0, RiscvMachineContext {
       pc: entry,
@@ -27,11 +42,18 @@ impl RiscvMachine {
       contexts,
       current_context: 0,
       halted: false,
-      csr: CSR::new()
+      csr: CSR::new(),
+      _phantom: PhantomData::default()
     }
   }
 
-  pub fn state(&mut self) -> &mut RiscvMachineContext {
+  pub fn subsystem(&self) -> S { S::default() }
+
+  pub fn state(&mut self) -> &RiscvMachineContext {
+    self.contexts.get(&self.current_context).expect("Invalid context")
+  }
+
+  pub fn state_mut(&mut self) -> &mut RiscvMachineContext {
     self.contexts.get_mut(&self.current_context).expect("Invalid context")
   }
 
@@ -40,13 +62,13 @@ impl RiscvMachine {
 
   pub fn step(&mut self) -> RiscvMachineStepResult {
     let pc = self.state().pc;
-    let mut stream = DecodingStream::new(&self.memory[pc as usize..]);
+    let mut stream = DecodingStream::new(&self.memory.physical()[pc as usize..]);
     
     if let Some(instruction) = stream.next() {
       self.execute_instruction(instruction)
     } else {
       self.halt();
-      RiscvMachineStepResult::Trap
+      Err(RiscvMachineError::Trap)
     }
   }
 
@@ -54,13 +76,13 @@ impl RiscvMachine {
     let pc = self.state().pc;
     log::debug!("{:#016x}: Executing {:?}", pc, instruction);
 
-    let mut result = RiscvMachineStepResult::ExecutedInstruction(instruction);
+    let mut action = RiscvMachineStepAction::ExecutedInstruction { instruction };
     let mut next_instruction = pc + instruction.width_bytes();
 
     match instruction {
       Instruction::R { rs2, rs1, rd, opcode } => match opcode {
         Opcode::Op(function) => {
-          let registers = &mut self.state().registers;
+          let registers = &mut self.state_mut().registers;
           let lhs = registers.get(rs1);
           let rhs = registers.get(rs2);
 
@@ -86,7 +108,7 @@ impl RiscvMachine {
         },
 
         Opcode::Op32(function) => {
-          let registers = &mut self.state().registers;
+          let registers = &mut self.state_mut().registers;
           let lhs = registers.get(rs1) as u32;
           let rhs = registers.get(rs2) as u32;
 
@@ -122,7 +144,7 @@ impl RiscvMachine {
           let target = target & !0b1;
 
           log::trace!("{:#016x}: Jumping to {:#08x} + {} = {:#08x} with link {:#08x}", pc, base, offset, target, link);
-          self.state().registers.set(rd, link);
+          self.state_mut().registers.set(rd, link);
           next_instruction = target;
         },
 
@@ -146,8 +168,7 @@ impl RiscvMachine {
             LoadWidth::ByteUnsigned => self.load_byte_unsigned(address),
           };
 
-          self.state().registers.set(rd, value);
-
+          self.state_mut().registers.set(rd, value);
         },
 
         Opcode::MiscMem(function) => match function {
@@ -173,7 +194,7 @@ impl RiscvMachine {
           };
 
           log::debug!("OP-IMM: {:#016x} ({}) {:?} {:#016x} ({}, shamount={}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, shamount, value, value as i64);
-          self.state().registers.set(rd, value);
+          self.state_mut().registers.set(rd, value);
         },
 
         Opcode::OpImm32(function) => {
@@ -190,19 +211,25 @@ impl RiscvMachine {
 
           log::debug!("OP-IMM32: {:#08x} ({}) {:?} {:#08x} ({}, shamount={}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, shamount, value, value as i64);
 
-          self.state().registers.set(rd, value as i32 as u64);
+          self.state_mut().registers.set(rd, value as i32 as u64);
         },
 
         Opcode::System(function) => match function {
           SystemFunction::Environment(function) => match function {
             EnvironmentFunction::ECALL => {
-              result = RiscvMachineStepResult::SystemCall;
+              if let Some(subsystem_action) = self.subsystem().system_call(self)? {
+                match subsystem_action {
+                  SubsystemAction::Exit { status_code } => {
+                    action = RiscvMachineStepAction::Exit { status_code };
+                  }
+                }
+              }
             },
 
             EnvironmentFunction::MRET => {
               let mepc = self.csr.get(CSRRegister::MEPC);
               log::debug!("MRET returning to {:#016x}", mepc);
-              self.state().pc = mepc;
+              self.state_mut().pc = mepc;
             },
 
             _ => unimplemented!("environment function {:?}", function)
@@ -219,7 +246,7 @@ impl RiscvMachine {
 
       Instruction::S { imm, rs2, rs1, opcode } => match opcode {
         Opcode::Store(width) => {
-          let registers = &mut self.state().registers;
+          let registers = &mut self.state_mut().registers;
           let base_address = registers.get(rs1);
           let effective_address = if imm > 0 {
             base_address.wrapping_add((imm) as u64)
@@ -242,7 +269,7 @@ impl RiscvMachine {
 
       Instruction::B { imm, rs2, rs1, opcode } => match opcode {
         Opcode::Branch(operation) => {
-          let registers = &mut self.state().registers;
+          let registers = &mut self.state_mut().registers;
 
           let lhs = registers.get(rs1);
           let rhs = registers.get(rs2);
@@ -274,18 +301,20 @@ impl RiscvMachine {
 
       Instruction::U { imm, rd, opcode } => match opcode {
         Opcode::AuiPc => {
-          let pc = self.state().pc as u64;
+          let state = self.state_mut();
+          let pc = state.pc as u64;
           let offset = imm as u64;
           let value = pc.wrapping_add(offset);
           log::debug!("AUIPC: pc={:#016x}, imm={:#016x}, offset={:#016x}, value={:#016x}", pc, imm, offset, value);
-          self.state().registers.set(rd, value as u64);
+          state.registers.set(rd, value as u64);
         },
 
         Opcode::Lui => {
-          let prior = self.state().registers.get(rd);
+          let state = self.state_mut();
+          let prior = state.registers.get(rd);
           let value = imm;
           log::debug!("Lui: prior={:#016x}, imm={:#016x}, value={:#016x}", prior, imm, value);
-          self.state().registers.set(rd, value as u64);
+          state.registers.set(rd, value as u64);
         },
         
         _ => unimplemented!("U-type opcode {:?}", opcode)
@@ -293,7 +322,7 @@ impl RiscvMachine {
 
       Instruction::J { imm, rd, opcode } => match opcode {
         Opcode::JAl => {
-          let state = self.state();
+          let state = self.state_mut();
           let pc = state.pc;
           let link = next_instruction;
           let offset = imm * 2;
@@ -314,51 +343,51 @@ impl RiscvMachine {
       },
     };
 
-    self.state().pc = next_instruction;
+    self.state_mut().pc = next_instruction;
 
-    result
+    Ok(action)
   }
 
   fn store_double_word(&mut self, address: u64, value: u64) {
-    log::debug!("{:#016x}: Writing double word{:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory[address as usize + 7] = (value >> 56) as u8;
-    self.memory[address as usize + 6] = (value >> 48) as u8;
-    self.memory[address as usize + 5] = (value >> 40) as u8;
-    self.memory[address as usize + 4] = (value >> 32) as u8;
-    self.memory[address as usize + 3] = (value >> 24) as u8;
-    self.memory[address as usize + 2] = (value >> 16) as u8;
-    self.memory[address as usize + 1] = (value >> 8) as u8;
-    self.memory[address as usize + 0] = (value >> 0) as u8;
+    log::debug!("{:#016x}: Writing double word {:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    self.memory.physical()[address as usize + 7] = (value >> 56) as u8;
+    self.memory.physical()[address as usize + 6] = (value >> 48) as u8;
+    self.memory.physical()[address as usize + 5] = (value >> 40) as u8;
+    self.memory.physical()[address as usize + 4] = (value >> 32) as u8;
+    self.memory.physical()[address as usize + 3] = (value >> 24) as u8;
+    self.memory.physical()[address as usize + 2] = (value >> 16) as u8;
+    self.memory.physical()[address as usize + 1] = (value >> 8) as u8;
+    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
   }
 
   fn store_word(&mut self, address: u64, value: u64) {
     log::debug!("{:#016x}: Writing word {:#08x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory[address as usize + 3] = (value >> 24) as u8;
-    self.memory[address as usize + 2] = (value >> 16) as u8;
-    self.memory[address as usize + 1] = (value >> 8) as u8;
-    self.memory[address as usize + 0] = (value >> 0) as u8;
+    self.memory.physical()[address as usize + 3] = (value >> 24) as u8;
+    self.memory.physical()[address as usize + 2] = (value >> 16) as u8;
+    self.memory.physical()[address as usize + 1] = (value >> 8) as u8;
+    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
   }
 
   fn store_halfword(&mut self, address: u64, value: u64) {
     log::debug!("{:#016x}: Writing half-word {:#04x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory[address as usize + 1] = (value >> 8) as u8;
-    self.memory[address as usize + 0] = (value >> 0) as u8;
+    self.memory.physical()[address as usize + 1] = (value >> 8) as u8;
+    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
   }
 
   fn store_byte(&mut self, address: u64, value: u64) {
     log::debug!("{:#016x}: Writing byte {:#02x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory[address as usize + 0] = (value >> 0) as u8;
+    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
   }
 
   fn load_double_word(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 7] as u64) << 56
-                   | (self.memory[address as usize + 6] as u64) << 48
-                   | (self.memory[address as usize + 5] as u64) << 40
-                   | (self.memory[address as usize + 4] as u64) << 32
-                   | (self.memory[address as usize + 3] as u64) << 24
-                   | (self.memory[address as usize + 2] as u64) << 16
-                   | (self.memory[address as usize + 1] as u64) << 8
-                   | (self.memory[address as usize + 0] as u64) << 0;
+    let value = (self.memory.physical()[address as usize + 7] as u64) << 56
+                   | (self.memory.physical()[address as usize + 6] as u64) << 48
+                   | (self.memory.physical()[address as usize + 5] as u64) << 40
+                   | (self.memory.physical()[address as usize + 4] as u64) << 32
+                   | (self.memory.physical()[address as usize + 3] as u64) << 24
+                   | (self.memory.physical()[address as usize + 2] as u64) << 16
+                   | (self.memory.physical()[address as usize + 1] as u64) << 8
+                   | (self.memory.physical()[address as usize + 0] as u64) << 0;
 
     log::debug!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -366,10 +395,10 @@ impl RiscvMachine {
   }
 
   fn load_word(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 3] as u32) << 24
-                   | (self.memory[address as usize + 2] as u32) << 16
-                   | (self.memory[address as usize + 1] as u32) << 8
-                   | (self.memory[address as usize + 0] as u32) << 0;
+    let value = (self.memory.physical()[address as usize + 3] as u32) << 24
+                   | (self.memory.physical()[address as usize + 2] as u32) << 16
+                   | (self.memory.physical()[address as usize + 1] as u32) << 8
+                   | (self.memory.physical()[address as usize + 0] as u32) << 0;
 
     log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -377,10 +406,10 @@ impl RiscvMachine {
   }
 
   fn load_word_unsigned(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 3] as u32) << 24
-                   | (self.memory[address as usize + 2] as u32) << 16
-                   | (self.memory[address as usize + 1] as u32) << 8
-                   | (self.memory[address as usize + 0] as u32) << 0;
+    let value = (self.memory.physical()[address as usize + 3] as u32) << 24
+                   | (self.memory.physical()[address as usize + 2] as u32) << 16
+                   | (self.memory.physical()[address as usize + 1] as u32) << 8
+                   | (self.memory.physical()[address as usize + 0] as u32) << 0;
 
     log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -388,8 +417,8 @@ impl RiscvMachine {
   }
 
   fn load_halfword(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 1] as u16) << 8
-                   | (self.memory[address as usize + 0] as u16) << 0;
+    let value = (self.memory.physical()[address as usize + 1] as u16) << 8
+                   | (self.memory.physical()[address as usize + 0] as u16) << 0;
 
     log::debug!("{:#016x}: Loaded half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -397,8 +426,8 @@ impl RiscvMachine {
   }
 
   fn load_halfword_unsigned(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 1] as u16) << 8
-                   | (self.memory[address as usize + 0] as u16) << 0;
+    let value = (self.memory.physical()[address as usize + 1] as u16) << 8
+                   | (self.memory.physical()[address as usize + 0] as u16) << 0;
 
     log::debug!("{:#016x}: Loaded unsigned half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -406,7 +435,7 @@ impl RiscvMachine {
   }
 
   fn load_byte(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 0] as u8) << 0;
+    let value = (self.memory.physical()[address as usize + 0] as u8) << 0;
 
     log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -414,7 +443,7 @@ impl RiscvMachine {
   }
 
   fn load_byte_unsigned(&mut self, address: u64) -> u64 {
-    let value = (self.memory[address as usize + 0] as u8) << 0;
+    let value = (self.memory.physical()[address as usize + 0] as u8) << 0;
 
     log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -429,12 +458,12 @@ pub struct RiscvMachineContext {
   pub program_break: u64
 }
 
-#[derive(Debug)]
-pub enum RiscvMachineStepResult {
-  ExecutedInstruction(Instruction),
-  Trap,
-  SystemCall,
+pub enum RiscvMachineStepAction {
+  ExecutedInstruction { instruction: Instruction },
+  Exit { status_code: u64 }
 }
+
+pub type RiscvMachineStepResult = Result<RiscvMachineStepAction, RiscvMachineError>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RiscvRegisters(HashMap<Register, u64>);
@@ -461,13 +490,11 @@ impl RiscvRegisters {
 
 #[cfg(test)]
 mod tests {
-  use crate::machine::RiscvMachine;
-  use memmap::MmapMut;
-  use riscy_isa::{Opcode, Instruction, Register, OpImmFunction, OpFunction};
+  use crate::{subsystem::Selfie, machine::RiscvMachine, memory::Memory};
 
-  fn machine() -> RiscvMachine {
-    let memory = MmapMut::map_anon(0x100000).expect("Could not create memory map");
-    RiscvMachine::new(memory, 0x10000)
+  fn machine() -> RiscvMachine<Selfie> {
+    let memory = Memory::new(0x100000);
+    RiscvMachine::<Selfie>::new(memory, 0x10000)
   }
 
   #[test]
@@ -476,361 +503,23 @@ mod tests {
     
     machine.store_double_word(0x1000, 0x1234567890abcdefu64);
 
-    assert_eq!(machine.memory[0x1000..=0x1007], [0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12]);
+    assert_eq!(machine.memory.physical()[0x1000..=0x1007], [0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12]);
   }
 
   #[test]
   fn test_load_double_word() {
     let mut machine = machine();
-    machine.memory[0x1007] = 0x12;
-    machine.memory[0x1006] = 0x34;
-    machine.memory[0x1005] = 0x56;
-    machine.memory[0x1004] = 0x78;
-    machine.memory[0x1003] = 0x90;
-    machine.memory[0x1002] = 0xab;
-    machine.memory[0x1001] = 0xcd;
-    machine.memory[0x1000] = 0xef;
+    machine.memory.physical()[0x1007] = 0x12;
+    machine.memory.physical()[0x1006] = 0x34;
+    machine.memory.physical()[0x1005] = 0x56;
+    machine.memory.physical()[0x1004] = 0x78;
+    machine.memory.physical()[0x1003] = 0x90;
+    machine.memory.physical()[0x1002] = 0xab;
+    machine.memory.physical()[0x1001] = 0xcd;
+    machine.memory.physical()[0x1000] = 0xef;
 
     let actual = machine.load_double_word(0x1000);
 
     assert_eq!(actual, 0x1234567890abcdefu64);
   }
-
-  #[test]
-  fn test_li() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::StackPointer, 0x0);
-    machine.state().registers.set(Register::ReturnAddress, 0x0);
-    machine.state().registers.set(Register::A4, 0xdeadbeefdeadbeef);
-    
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::StackPointer, 0xffffffffffff8000);
-      state.registers.set(Register::A4, 0xffffffffffff8000);
-      state.pc = 0x10008;
-      state
-    };
-
-    machine.execute_instruction(Instruction::U { 
-      opcode: Opcode::Lui, 
-      rd: Register::StackPointer, 
-      imm: -32768 
-    });
-
-    machine.execute_instruction(Instruction::R { 
-      opcode: Opcode::Op(OpFunction::ADD), 
-      rd: Register::A4, 
-      rs1: Register::ReturnAddress, 
-      rs2: Register::StackPointer 
-    });
-
-    println!("Expected SP: {:#016x}", expected.registers.get(Register::StackPointer));
-    println!("Actual SP:   {:#016x}", machine.state().registers.get(Register::StackPointer));
-
-    println!("Expected A4: {:#016x}", expected.registers.get(Register::A4));
-    println!("Actual A4:   {:#016x}", machine.state().registers.get(Register::A4));
-
-    assert_eq!(*machine.state(), expected);
-
-  }
-
-  #[test]
-  fn test_add() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 0xffffffff80000000);
-    machine.state().registers.set(Register::T1, 0x0000000000007fff);
-    machine.state().registers.set(Register::T2, 0xdeadbeefdeadbeef);
-    
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 0xffffffff80007fff);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::ADD),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2,
-    });
-
-    println!("Expected T2: {:#016x}", expected.registers.get(Register::T2));
-    println!("Actual T2:   {:#016x}", machine.state().registers.get(Register::T2));
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_addi() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 0x100);
-    machine.state().registers.set(Register::T1, 0x0);
-    
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T1, 0x110);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::I {
-      opcode: Opcode::OpImm(OpImmFunction::ADDI),
-      rs1: Register::T0,
-      rd: Register::T1,
-      imm: 0x10,
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_op_add() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 55);
-    machine.state().registers.set(Register::T1, 42);
-    machine.state().registers.set(Register::T2, 0xffff);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 97);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::ADD),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_op_add_wrapping() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 0xfffffffffffffffe);
-    machine.state().registers.set(Register::T1, 3);
-    machine.state().registers.set(Register::T2, 0xbad);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 1);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::ADD),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_op_sub() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 55);
-    machine.state().registers.set(Register::T1, 42);
-    machine.state().registers.set(Register::T2, 0xffff);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 13);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::SUB),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_op_sub_wrapping() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, std::u64::MIN + 1);
-    machine.state().registers.set(Register::T1, -2i32 as u64);
-    machine.state().registers.set(Register::T2, 0xffff);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 3);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::SUB),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-
-  #[test]
-  fn test_op_rem() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 33);
-    machine.state().registers.set(Register::T1, 5);
-    machine.state().registers.set(Register::T2, 0xffff);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 3);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::REMU),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_op_sltu_false() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 100);
-    machine.state().registers.set(Register::T1, 100);
-    machine.state().registers.set(Register::T2, 55);
-    
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 0);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::SLTU),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_op_sltu_true() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 99);
-    machine.state().registers.set(Register::T1, 100);
-    machine.state().registers.set(Register::T2, 55);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T2, 1);
-      state.pc = 0x10004;
-      state
-    };
-
-    machine.execute_instruction(Instruction::R {
-      opcode: Opcode::Op(OpFunction::SLTU),
-      rs1: Register::T0,
-      rs2: Register::T1,
-      rd: Register::T2
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_jal() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 0);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T0, 0x10004); 
-      state.pc = 0x10020; // adds imm to pc, in steps of two bytes
-      state
-    };
-
-    machine.execute_instruction(Instruction::J {
-      imm: 0x10,
-      rd: Register::T0,
-      opcode: Opcode::JAl
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_jalr_positive() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 0x10010);
-    machine.state().registers.set(Register::T1, 0);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T1, 0x10004); 
-      state.pc = 0x10012; // note: low bit is cleared
-      state
-    };
-
-    machine.execute_instruction(Instruction::I {
-      opcode: Opcode::JAlr,
-      imm: 3, // note: low-bit is set here
-      rs1: Register::T0,
-      rd: Register::T1,
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
-  #[test]
-  fn test_jalr_negative() {
-    let mut machine = machine();
-    machine.state().pc = 0x10000;
-    machine.state().registers.set(Register::T0, 0x10010);
-    machine.state().registers.set(Register::T1, 0);
-
-    let expected = {
-      let mut state = machine.state().clone();
-      state.registers.set(Register::T1, 0x10004); 
-      state.pc = 0x1000c; // note: low bit is cleared
-      state
-    };
-
-    machine.execute_instruction(Instruction::I {
-      opcode: Opcode::JAlr,
-      imm: -3, // note: low-bit is set here
-      rs1: Register::T0,
-      rd: Register::T1,
-    });
-
-    assert_eq!(*machine.state(), expected);
-  }
-
 }

@@ -1,3 +1,4 @@
 pub mod machine;
-pub mod syscall;
+pub mod memory;
+pub mod subsystem;
 pub mod csr;
