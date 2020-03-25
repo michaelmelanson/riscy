@@ -35,7 +35,7 @@ for details about which ones are currently supported.
 
 | Instruction Set | Test suites passing | Notes |
 |-|-|-|
-| RV64I Base instruction set              | 38 / 53 test suites  **72%** | |
+| RV64I Base instruction set              | 38 / 51 test suites  **75%** | |
 | RV64M Integer multiplication & division | N/A  | Partial untested support |
 | Zicsr Control & Status Register         | N/A  | Minimal support for MRET instruction |
 
