@@ -14,19 +14,6 @@ macro_rules! deftest {
   }
 }
 
-macro_rules! deftest_ignore {
-  ($name: ident) => {
-    paste::item! {
-      #[test]
-      #[ignore]
-      fn [<rv64ui_p_ $name>] () {
-        let file = include_bytes!(concat!("riscv-tests/isa/rv64ui-p-", stringify!($name)));
-        run_test_suite(file)
-      }
-    }
-  }
-}
-
 deftest!(add);
 deftest!(addi);
 deftest!(addiw);
@@ -40,7 +27,7 @@ deftest!(bgeu);
 deftest!(blt);
 deftest!(bltu);
 deftest!(bne);
-deftest_ignore!(fence_i);
+deftest!(fence_i);
 deftest!(jal);
 deftest!(jalr);
 deftest!(lb);

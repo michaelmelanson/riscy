@@ -152,6 +152,7 @@ impl RiscvMachine {
 
         Opcode::MiscMem(function) => match function {
           MiscMemFunction::FENCE => log::warn!("FENCE operation ignored"),
+          MiscMemFunction::FENCEI => log::warn!("FENCEI operation ignored"),
         },
 
         Opcode::OpImm(function) => {
