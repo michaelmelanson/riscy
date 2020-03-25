@@ -127,23 +127,27 @@ impl RiscvMachine {
         },
 
         Opcode::Load(width) => {
-          match width {
-            LoadWidth::DoubleWord => {
-              let offset = imm;
-              let base = self.state().registers.get(rs1);
+          let offset = imm;
+          let base = self.state().registers.get(rs1);
 
-              let address = if offset < 0 {
-                base.wrapping_sub(-offset as u64)
-              } else {
-                base.wrapping_add(offset as u64)
-              };     
-              
-              let value = self.load_double_word(address);
-              self.state().registers.set(rd, value);
-            },
+          let address = if offset < 0 {
+            base.wrapping_sub(-offset as u64)
+          } else {
+            base.wrapping_add(offset as u64)
+          };     
 
-            _ => unimplemented!("Load with width {:?}", width)
-          }
+          let value = match width {
+            LoadWidth::DoubleWord => self.load_double_word(address),
+            LoadWidth::Word => self.load_word(address),
+            LoadWidth::WordUnsigned => self.load_word_unsigned(address),
+            LoadWidth::HalfWord => self.load_halfword(address),
+            LoadWidth::HalfWordUnsigned => self.load_halfword_unsigned(address),
+            LoadWidth::Byte => self.load_byte(address),
+            LoadWidth::ByteUnsigned => self.load_byte_unsigned(address),
+          };
+
+          self.state().registers.set(rd, value);
+
         },
 
         Opcode::MiscMem(function) => match function {
@@ -335,6 +339,62 @@ impl RiscvMachine {
     log::debug!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value
+  }
+
+  fn load_word(&mut self, address: u64) -> u64 {
+    let value = (self.memory[address as usize + 3] as u32) << 24
+                   | (self.memory[address as usize + 2] as u32) << 16
+                   | (self.memory[address as usize + 1] as u32) << 8
+                   | (self.memory[address as usize + 0] as u32) << 0;
+
+    log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+
+    value as i32 as u64
+  }
+
+  fn load_word_unsigned(&mut self, address: u64) -> u64 {
+    let value = (self.memory[address as usize + 3] as u32) << 24
+                   | (self.memory[address as usize + 2] as u32) << 16
+                   | (self.memory[address as usize + 1] as u32) << 8
+                   | (self.memory[address as usize + 0] as u32) << 0;
+
+    log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+
+    value as u64
+  }
+
+  fn load_halfword(&mut self, address: u64) -> u64 {
+    let value = (self.memory[address as usize + 1] as u16) << 8
+                   | (self.memory[address as usize + 0] as u16) << 0;
+
+    log::debug!("{:#016x}: Loaded half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+
+    value as i16 as u64
+  }
+
+  fn load_halfword_unsigned(&mut self, address: u64) -> u64 {
+    let value = (self.memory[address as usize + 1] as u16) << 8
+                   | (self.memory[address as usize + 0] as u16) << 0;
+
+    log::debug!("{:#016x}: Loaded unsigned half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+
+    value as u64
+  }
+
+  fn load_byte(&mut self, address: u64) -> u64 {
+    let value = (self.memory[address as usize + 0] as u8) << 0;
+
+    log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+
+    value as i8 as u64
+  }
+
+  fn load_byte_unsigned(&mut self, address: u64) -> u64 {
+    let value = (self.memory[address as usize + 0] as u8) << 0;
+
+    log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+
+    value as u64
   }
 }
 
