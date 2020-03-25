@@ -171,21 +171,25 @@ impl RiscvMachine {
             OpImmFunction::XORI => lhs ^ rhs,
           };
 
-          log::debug!("OpImm: {:#016x} ({}) {:?} {:#016x} ({}, shamount={}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, shamount, value, value as i64);
+          log::debug!("OP-IMM: {:#016x} ({}) {:?} {:#016x} ({}, shamount={}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, shamount, value, value as i64);
           self.state().registers.set(rd, value);
         },
 
         Opcode::OpImm32(function) => {
-          let lhs = self.state().registers.get(rs1) as i32;
+          let lhs = self.state().registers.get(rs1) as u32;
+          let rhs = imm as u32;
+          let shamount = rhs & 0b11111;
 
           let value = match function {
-            OpImm32Function::ADDIW => lhs.wrapping_add(imm as i32),
-            OpImm32Function::SLLIW => lhs.overflowing_shl(imm as u32 & 0b11111).0,
-            OpImm32Function::SRAIW => lhs.wrapping_shr(imm as u32 & 0b11111),
-            OpImm32Function::SRLIW => lhs.overflowing_shr(imm as u32).0,
+            OpImm32Function::ADDIW => lhs.wrapping_add(rhs),
+            OpImm32Function::SLLIW => lhs.overflowing_shl(shamount).0,
+            OpImm32Function::SRLIW => lhs.overflowing_shr(shamount).0,
+            OpImm32Function::SRAIW => (lhs as i32).wrapping_shr(shamount) as u32,
           };
 
-          self.state().registers.set(rd, value as u64);
+          log::debug!("OP-IMM32: {:#08x} ({}) {:?} {:#08x} ({}, shamount={}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, shamount, value, value as i64);
+
+          self.state().registers.set(rd, value as i32 as u64);
         },
 
         Opcode::System(function) => match function {
