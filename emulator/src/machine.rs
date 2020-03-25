@@ -165,10 +165,10 @@ impl RiscvMachine {
             OpImmFunction::SRLI => lhs.overflowing_shr(shamount).0,
             OpImmFunction::SRAI => (lhs as i64).overflowing_shr(shamount).0 as u64,
             OpImmFunction::SLTI => if (lhs as i64) < (rhs as i64) { 1 } else { 0 },
+            OpImmFunction::SLTIU => if lhs < rhs { 1 } else { 0 },
             OpImmFunction::ORI => lhs | rhs,
             OpImmFunction::ANDI => lhs & rhs,
             OpImmFunction::XORI => lhs ^ rhs,
-            _ => unimplemented!("OP-Imm function {:?}", function)
           };
 
           log::debug!("OpImm: {:#016x} ({}) {:?} {:#016x} ({}, shamount={}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, shamount, value, value as i64);
