@@ -91,6 +91,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             OpFunction::REMU => lhs.wrapping_rem(rhs),
             OpFunction::SUB  => lhs.wrapping_sub(rhs),
             OpFunction::MUL  => lhs.wrapping_mul(rhs),
+            OpFunction::DIV  => if rhs == 0 { -1i64 as u64 } else { (lhs as i64).overflowing_div(rhs as i64).0 as u64 },
             OpFunction::SLT  => if (lhs as i64) < (rhs as i64) { 1 } else { 0 },
             OpFunction::SLTU => if lhs < rhs { 1 } else { 0 },
             OpFunction::AND  => lhs & rhs,
