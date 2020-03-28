@@ -459,6 +459,8 @@ pub enum Op32Function {
   SLLW,
   SRLW,
   SRAW,
+
+  DIVUW
 }
 
 impl Op32Function {
@@ -469,6 +471,8 @@ impl Op32Function {
       (0b0000000, 0b001) => Op32Function::SLLW,
       (0b0000000, 0b101) => Op32Function::SRLW,
       (0b0100000, 0b101) => Op32Function::SRAW,
+
+      (0b0000001, 0b101) => Op32Function::DIVUW,
 
       _ => unimplemented!("OP-32 with func7={:#07b}, func3={:#03b}", func7, func3)
     }
@@ -481,6 +485,8 @@ impl Op32Function {
       Op32Function::SLLW => 0b001,
       Op32Function::SRLW => 0b101,
       Op32Function::SRAW => 0b101,
+
+      Op32Function::DIVUW => 0b101,
     }
   }
 
@@ -491,6 +497,8 @@ impl Op32Function {
       Op32Function::SLLW => 0b0000000,
       Op32Function::SRLW => 0b0000000,
       Op32Function::SRAW => 0b0100000,
+
+      Op32Function::DIVUW => 0b0000001
     }
   }
 }
