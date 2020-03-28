@@ -33,7 +33,7 @@ deftest!(divu);
 deftest!(divuw);
 deftest!(divw);
 deftest!(mul);
-deftest_ignore!(mulh);
+deftest!(mulh);
 deftest_ignore!(mulhsu);
 deftest_ignore!(mulhu);
 deftest_ignore!(mulw);
