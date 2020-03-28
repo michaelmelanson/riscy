@@ -31,7 +31,7 @@ macro_rules! deftest_ignore {
 deftest!(div);
 deftest!(divu);
 deftest!(divuw);
-deftest_ignore!(divw);
+deftest!(divw);
 deftest!(mul);
 deftest_ignore!(mulh);
 deftest_ignore!(mulhsu);
