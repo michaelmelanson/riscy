@@ -40,4 +40,4 @@ deftest!(mulw);
 deftest!(rem);
 deftest!(remu);
 deftest!(remuw);
-deftest_ignore!(remw);
+deftest!(remw);
