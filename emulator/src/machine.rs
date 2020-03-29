@@ -124,7 +124,8 @@ impl <S: Subsystem> RiscvMachine<S> {
             Op32Function::SRAW  => (lhs as i32).overflowing_shr(rhs as u32).0 as u32,
 
             Op32Function::DIVW  => if rhs == 0 { -1i32 as u32 } else { (lhs as i32).overflowing_div(rhs as i32).0 as u32 },
-            Op32Function::DIVUW => if rhs == 0 { -1i32 as u32 } else { lhs.overflowing_div(rhs).0 as u32 }
+            Op32Function::DIVUW => if rhs == 0 { -1i32 as u32 } else { lhs.overflowing_div(rhs).0 as u32 },
+            Op32Function::MULW  => (lhs as i32).overflowing_mul(rhs as i32).0 as u32,
           };
 
           log::debug!("OP-32: {:#08x} ({}) {:?} {:#08x} ({}) = {:#08x} ({})", lhs, lhs, function, rhs, rhs, result, result);
