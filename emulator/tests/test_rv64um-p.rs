@@ -38,6 +38,6 @@ deftest_ignore!(mulhsu);
 deftest!(mulhu);
 deftest!(mulw);
 deftest!(rem);
-deftest_ignore!(remu);
+deftest!(remu);
 deftest_ignore!(remuw);
 deftest_ignore!(remw);
