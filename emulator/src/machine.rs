@@ -90,11 +90,6 @@ impl <S: Subsystem> RiscvMachine<S> {
             OpFunction::ADD  => lhs.wrapping_add(rhs),
             OpFunction::REMU => lhs.wrapping_rem(rhs),
             OpFunction::SUB  => lhs.wrapping_sub(rhs),
-            OpFunction::MUL  => lhs.wrapping_mul(rhs),
-            OpFunction::MULH => ((lhs as i64 as i128).overflowing_mul(rhs as i64 as i128).0 >> 64) as u64,
-            OpFunction::MULHU => ((lhs as u128).overflowing_mul(rhs as u128).0 >> 64) as u64,
-            OpFunction::DIV  => if rhs == 0 { -1i64 as u64 } else { (lhs as i64).overflowing_div(rhs as i64).0 as u64 },
-            OpFunction::DIVU => if rhs == 0 { -1i64 as u64 } else { lhs.overflowing_div(rhs).0 },
             OpFunction::SLT  => if (lhs as i64) < (rhs as i64) { 1 } else { 0 },
             OpFunction::SLTU => if lhs < rhs { 1 } else { 0 },
             OpFunction::AND  => lhs & rhs,
@@ -103,6 +98,13 @@ impl <S: Subsystem> RiscvMachine<S> {
             OpFunction::SLL  => lhs.overflowing_shl(rhs as u32).0,
             OpFunction::SRL  => lhs.overflowing_shr(rhs as u32).0,
             OpFunction::SRA  => (lhs as i64).overflowing_shr(rhs as u32).0 as u64,
+
+            OpFunction::MUL  => lhs.wrapping_mul(rhs),
+            OpFunction::MULH => ((lhs as i64 as i128).overflowing_mul(rhs as i64 as i128).0 >> 64) as u64,
+            OpFunction::MULHU => ((lhs as u128).overflowing_mul(rhs as u128).0 >> 64) as u64,
+            OpFunction::DIV  => if rhs == 0 { -1i64 as u64 } else { (lhs as i64).overflowing_div(rhs as i64).0 as u64 },
+            OpFunction::DIVU => if rhs == 0 { -1i64 as u64 } else { lhs.overflowing_div(rhs).0 },
+            OpFunction::REM  => if rhs == 0 { lhs } else { (lhs as i64).overflowing_rem(rhs as i64).0 as u64 },
 
             _ => unimplemented!("Op function {:?}", function)
           };
