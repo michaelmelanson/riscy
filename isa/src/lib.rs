@@ -702,6 +702,7 @@ impl StoreWidth {
 pub enum Instruction {
   R { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, rs2: Register /*, funct7: u8 */ },
   I { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: i32 },
+  IS { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: u32 },
   S { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
   B { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
   U { opcode: Opcode, rd: Register,                               imm: i32 },
@@ -751,6 +752,17 @@ impl Instruction {
         opcode, 
         rd: Register::from_u8(rd as u8), 
         imm: imm as i32, 
+        rs1: Register::from_u8(rs1 as u8) 
+      }
+    };
+
+    let from_is_type = |opcode| {
+      let imm: u32 = imm11_0;
+
+      Instruction::IS { 
+        opcode, 
+        rd: Register::from_u8(rd as u8), 
+        imm: imm as u32, 
         rs1: Register::from_u8(rs1 as u8) 
       }
     };
@@ -821,7 +833,7 @@ impl Instruction {
       Opcode::OpImm32(_) => from_i_type(opcode),
       Opcode::Op(_)     => from_r_type(opcode),
       Opcode::Op32(_)   => from_r_type(opcode),
-      Opcode::System(_) => from_i_type(opcode),
+      Opcode::System(_) => from_is_type(opcode),
       Opcode::MiscMem(_) => from_i_type(opcode),
 
       _ => unimplemented!("opcode {:?}", opcode)
@@ -846,6 +858,16 @@ impl Instruction {
         let funct3 = opcode.funct3_field();
 
         (imm << 20) | 
+        (rs1.encode() << 15) | 
+        (funct3 << 12) | 
+        (rd.encode() << 7) | 
+        (opcode.opcode_field())
+      },
+
+      Instruction::IS { imm, rs1, rd, opcode } => {
+        let funct3 = opcode.funct3_field();
+
+        (imm << 20) as i32 | 
         (rs1.encode() << 15) | 
         (funct3 << 12) | 
         (rd.encode() << 7) | 

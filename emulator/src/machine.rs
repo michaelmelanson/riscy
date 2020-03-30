@@ -1,4 +1,3 @@
-use crate::csr::CSRIndex;
 use crate::csr::{CSRRegister, CSR};
 use crate::{memory::Memory, subsystem::{SubsystemError, Subsystem, SubsystemAction}};
 use riscy_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction, Op32Function};
@@ -42,7 +41,7 @@ impl <S: Subsystem> RiscvMachine<S> {
       contexts,
       current_context: 0,
       halted: false,
-      csr: CSR::new(),
+      csr: CSR::default(),
       _phantom: PhantomData::default()
     }
   }
@@ -226,6 +225,10 @@ impl <S: Subsystem> RiscvMachine<S> {
           self.state_mut().registers.set(rd, value as i32 as u64);
         },
 
+        _ => unimplemented!("I-type opcode {:?}", opcode)
+      },
+
+      Instruction::IS { imm, rd, rs1, opcode } => match opcode {
         Opcode::System(function) => match function {
           SystemFunction::Environment(function) => match function {
             EnvironmentFunction::ECALL => {
@@ -239,7 +242,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             },
 
             EnvironmentFunction::MRET => {
-              let mepc = self.csr.get(CSRRegister::MEPC);
+              let mepc = self.csr.get(CSRRegister::MachineExceptionProgramCounter);
               log::debug!("MRET returning to {:#016x}", mepc);
               self.state_mut().pc = mepc;
             },
@@ -249,11 +252,13 @@ impl <S: Subsystem> RiscvMachine<S> {
 
           SystemFunction::CSR(function) => {
             let state = self.contexts.get_mut(&self.current_context).expect("Invalid context");
-            self.csr.execute(function, imm as CSRIndex, rs1, rd, state);
+            let csr = CSRRegister::from(imm as u32);
+            self.csr.execute(function, csr, rs1, rd, state);
           },
         },
 
-        _ => unimplemented!("I-type opcode {:?}", opcode)
+        _ => unimplemented!("I(S)-type opcode {:?}", opcode)
+
       },
 
       Instruction::S { imm, rs2, rs1, opcode } => match opcode {

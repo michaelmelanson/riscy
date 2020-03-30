@@ -6,103 +6,129 @@ use riscy_isa::{
 };
 use std::collections::HashMap;
 
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum CSRRegister {
-  MEPC = 0x341
+  SupervisorAddressTranslationAndProtection,
+  MachineStatus,
+  MachineExceptionDelegation,
+  MachineInterruptDelegation,
+  MachineInterruptEnable,
+  MachineTrapHandlerBaseAddress,
+  MachineExceptionProgramCounter,
+  PhysMemProtectionConfig0,
+  PhysMemProtectionAddr0,
+  MachineHartId, 
 }
 
-pub type CSRIndex = u16;
-pub type CSRValue = u64;
+impl From<u32> for CSRRegister {
+  fn from(value: u32) -> Self {
+    match value {
+      0x180 => CSRRegister::SupervisorAddressTranslationAndProtection,
+      0x300 => CSRRegister::MachineStatus,
+      0x302 => CSRRegister::MachineExceptionDelegation,
+      0x303 => CSRRegister::MachineInterruptDelegation,
+      0x304 => CSRRegister::MachineInterruptEnable,
+      0x305 => CSRRegister::MachineTrapHandlerBaseAddress,
+      0x341 => CSRRegister::MachineExceptionProgramCounter,
+      0x3a0 => CSRRegister::PhysMemProtectionConfig0,
+      0x3b0 => CSRRegister::PhysMemProtectionAddr0,
+      0xf14 => CSRRegister::MachineHartId,
 
-#[derive(Debug)]
+      _ => unimplemented!("CSR {:#08x}", value)
+    }
+  }
+}
+
+impl Into<u32> for CSRRegister {
+  fn into(self) -> u32 { 
+    match self {
+      CSRRegister::SupervisorAddressTranslationAndProtection => 0x180,
+      CSRRegister::MachineStatus => 0x300,
+      CSRRegister::MachineExceptionDelegation => 0x302,
+      CSRRegister::MachineInterruptDelegation => 0x303,
+      CSRRegister::MachineInterruptEnable => 0x304,
+      CSRRegister::MachineTrapHandlerBaseAddress => 0x305,
+      CSRRegister::MachineExceptionProgramCounter => 0x341,
+      CSRRegister::PhysMemProtectionConfig0 => 0x3a0,
+      CSRRegister::PhysMemProtectionAddr0 => 0x3b0,
+      CSRRegister::MachineHartId => 0xf14,
+    }
+  }
+}
+
+type CSRValue = u64;
+
+#[derive(Debug, Default)]
 pub struct CSR {
-  registers: HashMap<CSRIndex, CSRValue>
+  registers: HashMap<CSRRegister, CSRValue>
 }
 
 impl CSR {
-  pub fn new() -> Self {
-    Self { 
-      registers: HashMap::new()
-    }
-  }
-
   pub fn get(&self, register: CSRRegister) -> CSRValue {
-    let index = register as CSRIndex;
-    self.get_index(index)
-  }
+    let value = *self.registers.get(&register).unwrap_or(&0);
 
-  pub fn get_index(&self, index: CSRIndex) -> CSRValue {
-    *self.registers.get(&index).unwrap_or(&0)
+    log::debug!("Read from {:?} ({:#08x}): {:#016x} ({})", register, register as u32, value, value);
+    value
   }
 
   pub fn set(&mut self, register: CSRRegister, value: CSRValue) {
-    let index = register as CSRIndex;
-    self.set_index(index, value)
-  }
+    log::debug!("Write to {:?} ({:#08x}): {:#016x} ({})", register, register as u32, value, value);
+    self.registers.insert(register, value);
+  } 
 
-  pub fn set_index(&mut self, index: CSRIndex, value: CSRValue) {
-    self.registers.insert(index, value);
-  }
+  pub fn execute(&mut self, function: CSRFunction, csr: CSRRegister, source: Register, dest: Register, state: &mut RiscvMachineContext) {
+    let old = self.get(csr);
 
-  
-
-  pub fn execute(&mut self, function: CSRFunction, index: CSRIndex, source: Register, dest: Register, state: &mut RiscvMachineContext) {
     match function {
       CSRFunction::CSRRW => {
-        let old = self.get_index(index);
         state.registers.set(dest, old);
 
         if source != Register::Zero {
           let new = state.registers.get(source);
-          self.set_index(index, new);
+          self.set(csr, new);
         }
       },
 
       CSRFunction::CSRRWI => {
-        let old = self.get_index(index);
         state.registers.set(dest, old);
 
         if source != Register::Zero {
           let new = source.encode() as CSRValue;
-          self.set_index(index, new);
+          self.set(csr, new);
         }
       },
 
       CSRFunction::CSRRS => {
-        let old = self.get_index(index);
         state.registers.set(dest, old);
 
         let mask = state.registers.get(dest);
         let new = old | mask;
 
-        self.set_index(index, new);
+        self.set(csr, new);
       },
 
       CSRFunction::CSRRSI => {
-        let old = self.get_index(index);
         state.registers.set(dest, old);
 
         let mask = dest.encode() as CSRValue;
         let new = old | mask;
-        self.set_index(index, new);
+        self.set(csr, new);
       },
 
       CSRFunction::CSRRC => {
-        let old = self.get_index(index);
         state.registers.set(dest, old);
 
         let mask = state.registers.get(dest);
         let new = old & !mask;
-        self.set_index(index, new);
+        self.set(csr, new);
       },
 
       CSRFunction::CSRRCI => {
-        let old = self.get_index(index);
         state.registers.set(dest, old);
 
         let mask = dest.encode() as CSRValue;
         let new = old & !mask;
-        self.set_index(index, new);
-
+        self.set(csr, new);
       }
     }
   }
