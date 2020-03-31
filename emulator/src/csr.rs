@@ -103,8 +103,6 @@ impl CSR {
         if source != Register::Zero {
           self.set(csr, new);
         }
-        
-        log::debug!("CSRW with\n          old={:#016x},\n          new={:#016x}", old, new);
       },
 
       CSRFunction::CSRRWI => {
@@ -118,7 +116,6 @@ impl CSR {
         if source != Register::Zero {
           self.set(csr, new);
         }
-        log::debug!("CSRWI with\n          old={:#016x},\n          new={:#016x}", old, new);
       },
 
       CSRFunction::CSRRS => {
@@ -131,8 +128,6 @@ impl CSR {
         if source != Register::Zero {
           self.set(csr, new);
         }
-
-        log::debug!("CSRRS with\n          old={:#016x},\n         mask={:#016x},\n          new={:#016x}", old, mask, new);
       },
 
       CSRFunction::CSRRSI => {
@@ -145,8 +140,6 @@ impl CSR {
         if mask != 0 {
           self.set(csr, new);
         }
-
-        log::debug!("CSRRSI with\n          old={:#016x},\n         mask={:#016x},\n          new={:#016x}", old, mask, new);
       },
 
       CSRFunction::CSRRC => {
@@ -156,8 +149,6 @@ impl CSR {
         
         registers.set(dest, old);
         self.set(csr, new);
-        
-        log::debug!("CSRC with\n          old={:#016x},\n         mask={:#016x},\n          new={:#016x}", old, mask, new);
       },
 
       CSRFunction::CSRRCI => {
@@ -167,8 +158,6 @@ impl CSR {
         
         registers.set(dest, old);
         self.set(csr, new);
-
-        log::debug!("CSRCI with\n          old={:#016x},\n         mask={:#016x},\n          new={:#016x}", old, mask, new);
       }
     }
   }
