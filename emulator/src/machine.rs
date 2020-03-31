@@ -23,17 +23,26 @@ pub struct RiscvMachine<S: Subsystem> {
   contexts: HashMap<i32, RiscvMachineContext>,
   current_context: i32,
   halted: bool,
-  csr: CSR,
   _phantom: PhantomData<S>
 }
 
 impl <S: Subsystem> RiscvMachine<S> {
   pub fn new(memory: Memory, entry: u64) -> Self {
+    let mut csr = CSR::default();
+    csr.set(CSRRegister::MachineISA, 
+      2 << (64-2)
+    );
+    csr.set(CSRRegister::MachineStatus, 
+      (2 << 32)
+      | (2 << 34)
+    );
+
     let mut contexts = HashMap::new();
     contexts.insert(0, RiscvMachineContext {
       pc: entry,
       registers: RiscvRegisters::new(),
-      program_break: 0
+      program_break: 0,
+      csr
     });
 
     Self {
@@ -41,7 +50,6 @@ impl <S: Subsystem> RiscvMachine<S> {
       contexts,
       current_context: 0,
       halted: false,
-      csr: CSR::default(),
       _phantom: PhantomData::default()
     }
   }
@@ -242,7 +250,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             },
 
             EnvironmentFunction::MRET => {
-              let mepc = self.csr.get(CSRRegister::MachineExceptionProgramCounter);
+              let mepc = self.state().csr.get(CSRRegister::MachineExceptionProgramCounter);
               log::debug!("MRET returning to {:#016x}", mepc);
               self.state_mut().pc = mepc;
             },
@@ -252,8 +260,7 @@ impl <S: Subsystem> RiscvMachine<S> {
 
           SystemFunction::CSR(function) => {
             let state = self.contexts.get_mut(&self.current_context).expect("Invalid context");
-            let csr = CSRRegister::from(imm as u32);
-            self.csr.execute(function, csr, rs1, rd, state);
+            state.csr.execute(function, CSRRegister::from_u32(imm as u32), rs1, rd, &mut state.registers);
           },
         },
 
@@ -472,7 +479,8 @@ impl <S: Subsystem> RiscvMachine<S> {
 pub struct RiscvMachineContext {
   pub registers: RiscvRegisters,
   pub pc: u64,
-  pub program_break: u64
+  pub program_break: u64,
+  pub csr: CSR,
 }
 
 pub enum RiscvMachineStepAction {
