@@ -1106,7 +1106,7 @@ pub fn test_instruction_decoding() {
   decode_test(&[19, 5, 0, 0],     Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A0, rs1: Register::Zero, imm: 0 });
   decode_test(&[147, 8, 96, 13],  Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A7, rs1: Register::Zero, imm: 214 });
   decode_test(&[0x93, 0x87, 0xe0, 0xFC], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A5, rs1: Register::ReturnAddress, imm: -50 });
-  decode_test(&[115, 0, 0, 0],    Instruction::I { opcode: Opcode::System(SystemFunction::Environment(EnvironmentFunction::ECALL)), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
+  decode_test(&[115, 0, 0, 0],    Instruction::IS { opcode: Opcode::System(SystemFunction::Environment(EnvironmentFunction::ECALL)), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
   decode_test(&[239, 0, 64, 15],  Instruction::J { opcode: Opcode::JAl, rd: Register::ReturnAddress, imm: 122});
   decode_test(&[99, 4, 101, 0],   Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8});
   decode_test(&[0x83, 0x21, 0x72, 0x03], Instruction::I { opcode: Opcode::Load(LoadWidth::Word), imm: 55, rs1: Register::ThreadPointer, rd: Register::GlobalPointer });
