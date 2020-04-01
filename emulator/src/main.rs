@@ -16,6 +16,8 @@ fn main()  -> Result<(), RiscvMachineError> {
       .index(1))
 
     .arg(Arg::with_name("MEMORY")
+      .short("m")
+      .long("memory")
       .help("Size of memory (in megabytes)")
       .default_value("128"))
 
