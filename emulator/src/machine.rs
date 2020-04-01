@@ -349,7 +349,7 @@ impl <S: Subsystem> RiscvMachine<S> {
           let state = self.state_mut();
           let pc = state.pc;
           let link = next_instruction;
-          let offset = imm * 2;
+          let offset = imm;
 
           let target = if offset < 0 {
             pc.wrapping_sub(-offset as u64)
@@ -365,6 +365,20 @@ impl <S: Subsystem> RiscvMachine<S> {
         _ => unimplemented!("J-type opcode {:?}", opcode)
 
       },
+
+      Instruction::CIW { opcode, imm, rd } => match opcode {
+        Opcode::CADDI4SPN => {
+          let state = self.state_mut();
+          let source = state.registers.get(Register::StackPointer);
+          let result = source + imm as u64;
+
+          log::debug!("{:#016x}: C.ADDI4SPN added stack pointer {:#016x} + {} = {:#016x}", pc, source, imm, result);
+
+          state.registers.set(rd, result);
+        },
+
+        _ => unimplemented!("CIW-type opcode {:?}", opcode)
+      }
     };
 
     self.state_mut().pc = next_instruction;

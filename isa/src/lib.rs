@@ -37,9 +37,22 @@ pub enum Opcode {
   System(SystemFunction),
   Reserved2,
   Custom3,
+
+  // "C" (Compressed) extension
+  CADDI4SPN,
 }
 
 impl Opcode {
+
+  fn new_compressed(base: u16) -> Opcode {
+    let op_low = base & 0b11;
+    let op_high = (base >> 13) & 0b111;
+
+    match (op_high, op_low) {
+      (0b000, 0b00) => Opcode::CADDI4SPN,
+      _ => todo!("compressed instruction with op={:03b}...{:02b} from base={:016b} ({:#04x})", op_high, op_low, base, base)
+    }
+  }
 
   fn new(base: u16, func3: u8, imm11_0: u16, func7: u8) -> Opcode {
     let opcode = base & 0b1111111;
@@ -112,7 +125,9 @@ impl Opcode {
       Opcode::JAl => 0b1101111,
       Opcode::System(_) => 0b1110011, 
       Opcode::Reserved2 => 0b1110111, 
-      Opcode::Custom3 => 0b1111011
+      Opcode::Custom3 => 0b1111011,
+
+      Opcode::CADDI4SPN => unimplemented!()
     }
   }
 
@@ -706,10 +721,31 @@ pub enum Instruction {
   S { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
   B { opcode: Opcode,               /*func3: u8,*/ rs1: Register, rs2: Register, imm: i32 },
   U { opcode: Opcode, rd: Register,                               imm: i32 },
-  J { opcode: Opcode, rd: Register,                               imm: i32 }
+  J { opcode: Opcode, rd: Register,                               imm: i32 },
+
+  // "C" (Compressed) extension
+  CIW { opcode: Opcode, rd: Register, imm: u16 },
 }
 
 impl Instruction {
+  pub fn from_16bits(encoded: u16) -> Instruction {
+    let opcode = Opcode::new_compressed(encoded);
+
+    match opcode {
+      Opcode::CADDI4SPN => {
+        let nzuimm = (encoded >> 5) & 0b11111111;
+        let rd = ((encoded >> 2) & 0b111) as u8;
+        
+        let imm = nzuimm * 4;
+        let rd = Register::from_u8(rd + 8);
+
+        Instruction::CIW { opcode, imm, rd }
+      },
+
+      _ => unimplemented!("compressed opcode {:#?}", opcode)
+    }
+  }
+
   pub fn from_32bits(encoded: u32) -> Instruction {
     let funct3   = (encoded >> 12) & 0b111;
     let funct7   = (encoded >> 25) & 0b1111111;
@@ -722,7 +758,6 @@ impl Instruction {
     let imm12     = (encoded >> 31) & 0b1;
     let imm11_5   = (encoded >> 25) & 0b1111111;
     let imm10_5   = (encoded >> 25) & 0b111111;
-    let imm10_1   = (encoded >> 22) & 0b1111111111;
     let imm4_1    = (encoded >> 8) & 0b1111;
     let imm11_0   = (encoded >> 20) & 0b111111111111;
     let imm4_0    = (encoded >> 7) & 0b11111;
@@ -808,6 +843,7 @@ impl Instruction {
 
     let from_j_type = |opcode| {
       let imm11 = (encoded >> 20) & 0b1;
+      let imm10_1   = (encoded >> 21) & 0b1111111111;
 
       let imm = (if sign_bit > 0 { 0b111111111111 << 20 } else { 0 })
                    | (imm19_12 << 12)
@@ -843,9 +879,17 @@ impl Instruction {
   }
 
   pub fn bytes(&self) -> Vec<u8> {
-    let encoded = match self {
 
-      Instruction::R { rs2, rs1, rd, opcode } => (
+    fn encode_16bits(instruction: u16) -> Vec<u8> {
+      instruction.to_le_bytes().to_vec()
+    }
+
+    fn encode_32bits(instruction: i32) -> Vec<u8> {
+      instruction.to_le_bytes().to_vec()
+    }
+
+    match self {
+      Instruction::R { rs2, rs1, rd, opcode } => encode_32bits(
         (opcode.funct7_field() << 25) |
         (rs2.encode() << 20) |
         (rs1.encode() << 15) |
@@ -857,64 +901,94 @@ impl Instruction {
       Instruction::I { imm, rs1, rd, opcode } => {
         let funct3 = opcode.funct3_field();
 
-        (imm << 20) | 
-        (rs1.encode() << 15) | 
-        (funct3 << 12) | 
-        (rd.encode() << 7) | 
-        (opcode.opcode_field())
+        encode_32bits(
+          (imm << 20) | 
+          (rs1.encode() << 15) | 
+          (funct3 << 12) | 
+          (rd.encode() << 7) | 
+          opcode.opcode_field()
+        )
       },
 
       Instruction::IS { imm, rs1, rd, opcode } => {
         let funct3 = opcode.funct3_field();
 
-        (imm << 20) as i32 | 
-        (rs1.encode() << 15) | 
-        (funct3 << 12) | 
-        (rd.encode() << 7) | 
-        (opcode.opcode_field())
+        encode_32bits(
+          (imm << 20) as i32 | 
+          (rs1.encode() << 15) | 
+          (funct3 << 12) | 
+          (rd.encode() << 7) | 
+          (opcode.opcode_field())
+        )
       },
 
       Instruction::S { imm, rs2, rs1, opcode } => (
-        (((imm >> 5) & 0b1111111) << 25) |
-        (rs2.encode() << 20) |
-        (rs1.encode() << 15) |
-        (opcode.funct3_field() << 12) |
-        ((imm & 0b11111) << 7) |
-        opcode.opcode_field()
+        encode_32bits(
+          (((imm >> 5) & 0b1111111) << 25) |
+          (rs2.encode() << 20) |
+          (rs1.encode() << 15) |
+          (opcode.funct3_field() << 12) |
+          ((imm & 0b11111) << 7) |
+          opcode.opcode_field()
+        )
       ),
 
       Instruction::B { imm, rs2, rs1, opcode } => (
-        (((imm >> 20) & 0b1) << 31) |
-        (((imm >> 5) & 0b111111) << 25) |
-        (rs2.encode() << 20) |
-        (rs1.encode() << 15) |
-        (opcode.funct3_field() << 12) |
-        (((imm >> 1) & 0b1111) << 8) |
-        (((imm >> 11) & 0b1) << 7) |
-        opcode.opcode_field()
+        encode_32bits(
+          (((imm >> 20) & 0b1) << 31) |
+          (((imm >> 5) & 0b111111) << 25) |
+          (rs2.encode() << 20) |
+          (rs1.encode() << 15) |
+          (opcode.funct3_field() << 12) |
+          (((imm >> 1) & 0b1111) << 8) |
+          (((imm >> 11) & 0b1) << 7) |
+          opcode.opcode_field()
+        )
       ),
 
-      Instruction::U { imm, rd, opcode } => 
-        rd.encode() << 7
-        | opcode.opcode_field()
-        | (imm & 0b11111111111111111111),
+      Instruction::U { imm, rd, opcode } => (
+        encode_32bits(
+          rd.encode() << 7 | 
+          opcode.opcode_field() | 
+          (imm & 0b11111111111111111111)
+        )
+      ),
 
 
       Instruction::J { imm, rd, opcode } => (
-        (((imm >> 20) & 0b1) << 31) |
-        (((imm >> 1) & 0b1111111111) << 22) |
-        (((imm >> 11) & 0b1) << 20) |
-        (((imm >> 12) & 0b11111111) << 12) |
-        (rd.encode() << 7) |
-        opcode.opcode_field()
-      )
-    };
+        encode_32bits(
+          (((imm >> 20) & 0b1) << 31) |
+          (((imm >> 1) & 0b1111111111) << 21) |
+          (((imm >> 11) & 0b1) << 20) |
+          (((imm >> 12) & 0b11111111) << 12) |
+          (rd.encode() << 7) |
+          opcode.opcode_field()
+        )
+      ),
 
-    encoded.to_le_bytes().to_vec()
+      Instruction::CIW { opcode, rd, imm } => (
+        encode_16bits(
+          ((opcode.funct3_field() as u16) << 13) |
+          (((*imm as u16 >> 2) & 0b11111111) << 5) |
+          ((rd.encode() as u16 - 8) << 2) |
+          opcode.opcode_field() as u16
+        )
+      ),
+    }
   }
 
   pub fn width_bytes(&self) -> u64 {
-    4
+    match self {      
+      Instruction::CIW { opcode: _, rd: _, imm: _ } => 2,
+
+      Instruction::R { opcode: _, rd: _, rs1: _, rs2: _ } | 
+      Instruction::I { opcode: _, rd: _, rs1: _, imm: _ } | 
+      Instruction::IS { opcode: _, rd: _, rs1: _, imm: _ } | 
+      Instruction::S { opcode: _, rs1: _, rs2: _, imm: _ } | 
+      Instruction::B { opcode: _, rs1: _, rs2: _, imm: _ } | 
+      Instruction::U { opcode: _, rd: _, imm: _ } | 
+      Instruction::J { opcode: _, rd: _, imm: _ } => 4,
+    }
   }
 }
 
@@ -949,7 +1023,7 @@ impl<'a> Iterator for DecodingStream<'a> {
     let ones = base.trailing_ones();
     
     match ones {
-      1 => unimplemented!("16-bit instruction: {:?}", base),
+      0..=1 => Some(Instruction::from_16bits(base)),
 
       2..=4 => {
         let second: u32 = self.cursor.read_u16::<LittleEndian>().unwrap() as u32;
@@ -1107,7 +1181,9 @@ pub fn test_instruction_decoding() {
   decode_test(&[147, 8, 96, 13],  Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A7, rs1: Register::Zero, imm: 214 });
   decode_test(&[0x93, 0x87, 0xe0, 0xFC], Instruction::I { opcode: Opcode::OpImm(OpImmFunction::ADDI), rd: Register::A5, rs1: Register::ReturnAddress, imm: -50 });
   decode_test(&[115, 0, 0, 0],    Instruction::IS { opcode: Opcode::System(SystemFunction::Environment(EnvironmentFunction::ECALL)), rd: Register::Zero, rs1: Register::Zero, imm: 0 });
-  decode_test(&[239, 0, 64, 15],  Instruction::J { opcode: Opcode::JAl, rd: Register::ReturnAddress, imm: 122});
+  decode_test(&[239, 0, 64, 15],  Instruction::J { opcode: Opcode::JAl, rd: Register::ReturnAddress, imm: 244});
+  decode_test(&[0x6f, 0x00, 0x80, 0x04], Instruction::J { opcode: Opcode::JAl, rd: Register::Zero, imm: 72 });
+  decode_test(&[0x6f, 0x10, 0xf0, 0x67], Instruction::J { opcode: Opcode::JAl, rd: Register::Zero, imm: 7806 });
   decode_test(&[99, 4, 101, 0],   Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8});
   decode_test(&[0x83, 0x21, 0x72, 0x03], Instruction::I { opcode: Opcode::Load(LoadWidth::Word), imm: 55, rs1: Register::ThreadPointer, rd: Register::GlobalPointer });
   decode_test(&[35, 48, 81, 0], Instruction::S { opcode: Opcode::Store(StoreWidth::DoubleWord), rs2: Register::T0, rs1: Register::StackPointer, imm: 0 });
