@@ -378,7 +378,22 @@ impl <S: Subsystem> RiscvMachine<S> {
         },
 
         _ => unimplemented!("CIW-type opcode {:?}", opcode)
-      }
+      },
+
+      Instruction::CI { opcode, imm } => match opcode {
+        Opcode::CADDI16SP => {
+          let state = self.state_mut();
+          let source = state.registers.get(Register::StackPointer);
+          let result = source.wrapping_add(imm as u64);
+
+          log::debug!("{:#016x}: C.ADDI16SP added stack pointer {:#016x} + {} = {:#016x}", pc, source, imm, result);
+          state.registers.set(Register::StackPointer, result);
+        },
+
+        _ => unimplemented!("CI-type opcode {:?}", opcode)
+      },
+
+      Instruction::CNOP => {},
     };
 
     self.state_mut().pc = next_instruction;
