@@ -40,9 +40,16 @@ pub enum Opcode {
 
   // "C" (Compressed) extension
   CADDI4SPN,
+  CADDI,
+  CNOP,
+  CLW,
+  CLD,
+  CSW,
+  CSD,
+  CADDIW,
+  CLI,
   CADDI16SP,
   CLUI,
-  CNOP,
 }
 
 impl Opcode {
@@ -53,12 +60,22 @@ impl Opcode {
 
     match (op_high, op_low) {
       (0b000, 0b00) => Opcode::CADDI4SPN,
+      (0b000, 0b01) => if (base >> 7) & 0b11111 == 0 {
+        Opcode::CNOP
+      } else {
+        Opcode::CADDI
+      },
+      (0b010, 0b00) => Opcode::CLW,
+      (0b011, 0b00) => Opcode::CLD,
+      (0b110, 0b00) => Opcode::CSW,
+      (0b111, 0b00) => Opcode::CSD,
+      (0b001, 0b01) => Opcode::CADDIW,
+      (0b010, 0b01) => Opcode::CLI,
       (0b011, 0b01) => if (base >> 7) & 0b11111 == 2 {
         Opcode::CADDI16SP
       } else {
         Opcode::CLUI
       },
-      (0b000, 0b01) => Opcode::CNOP,
       _ => todo!("compressed instruction with op={:03b}...{:02b} from base={:016b} ({:#04x})", op_high, op_low, base, base)
     }
   }
@@ -137,9 +154,16 @@ impl Opcode {
       Opcode::Custom3 => 0b1111011,
 
       Opcode::CADDI4SPN => 0b00,
+      Opcode::CADDI     => 0b01,
+      Opcode::CNOP      => 0b01,
+      Opcode::CLW       => 0b00,
+      Opcode::CLD       => 0b00,
+      Opcode::CSW       => 0b00,
+      Opcode::CSD       => 0b00,
+      Opcode::CADDIW    => 0b01,
+      Opcode::CLI       => 0b01,
       Opcode::CADDI16SP => 0b01,
       Opcode::CLUI      => 0b01,
-      Opcode::CNOP      => 0b01,
     }
   }
 
@@ -229,6 +253,11 @@ impl Register {
       _ => unimplemented!("register {}", value)
     }
   }
+
+  pub fn encode_prime(&self) -> u16 {
+    self.encode() as u16 - 8
+  }
+
   pub fn encode(&self) -> i32 {
     match self {
       Register::Zero => 0,  
@@ -732,6 +761,7 @@ impl StoreWidth {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Instruction {
+  // Base instruction set
   R { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, rs2: Register /*, funct7: u8 */ },
   I { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: i32 },
   IS { opcode: Opcode, rd: Register, /*func3: u8,*/ rs1: Register, imm: u32 },
@@ -742,7 +772,9 @@ pub enum Instruction {
 
   // "C" (Compressed) extension
   CIW { opcode: Opcode, rd: Register, imm: u16 },
-  CI { opcode: Opcode, /* rd: Register, */ imm: i16 },
+  CS { opcode: Opcode, rs1: Register, rs2: Register, imm: u16 },
+  CL { opcode: Opcode, rs1: Register, rd: Register, imm: u16 },
+  CI { opcode: Opcode, rd: Register, imm: i16 },
   CNOP
 }
 
@@ -761,18 +793,118 @@ impl Instruction {
         Instruction::CIW { opcode, imm, rd }
       },
 
+      Opcode::CNOP => Instruction::CNOP,
+
+      Opcode::CADDI => {
+        let sign_bit = (encoded >> 12) & 0b1;
+
+        let imm = 
+          (if sign_bit > 0 { 0b1111111111111111u16 << 5 } else { 0 }) |
+          ((encoded >> 2) & 0b11111);
+        let imm = imm as i16;
+
+        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+    
+        Instruction::CI { opcode, imm, rd }
+      },
+
+      Opcode::CLW => {
+        let imm = 
+          ((encoded >> 6) & 0b1) << 2 |
+          ((encoded >> 10) & 0b111) << 3 |
+          ((encoded >> 5) & 0b1) << 6;
+
+        let rs1 = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rd = Register::from_rd_prime(((encoded >> 2) & 0b111) as u8);
+    
+        Instruction::CL { opcode, imm, rs1, rd }
+      },
+
+      Opcode::CLD => {
+        let imm = 
+          ((encoded >> 10) & 0b111) << 3 |
+          ((encoded >> 5) & 0b11) << 6;
+
+        let rs1 = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rd = Register::from_rd_prime(((encoded >> 2) & 0b111) as u8);
+    
+        Instruction::CL { opcode, imm, rs1, rd }
+      },
+
       Opcode::CADDI16SP => {
         let nzuimm_9 = (encoded >> 12) & 0b1;
         let nzuimm_etc = (encoded >> 2) & 0b11111;
         let sign_bit = nzuimm_9;
-        let imm = (if sign_bit > 0 { 0b1111111 << 10 } else { 0 })
+        let imm = ((if sign_bit > 0 { 0b1111111111111111 << 10 } else { 0 })
                      | (nzuimm_etc << 4) 
-                     | (nzuimm_9 << 9);
+                     | (nzuimm_9 << 9)) as i16;
+                
+        let rd = Register::StackPointer;
 
-        Instruction::CI { opcode, imm: imm as i16 }
+        Instruction::CI { opcode, imm, rd}
       }
 
-      Opcode::CNOP => Instruction::CNOP,
+      Opcode::CSW => {
+        let imm = 
+          ((encoded >> 6) & 0b1) << 2 |
+          ((encoded >> 10) & 0b111) << 3 |
+          ((encoded >> 5) & 0b1) << 6;
+
+        let rs1 = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rs2 = Register::from_rd_prime(((encoded >> 2) & 0b111) as u8);
+    
+        Instruction::CS { opcode, rs1, rs2, imm }
+      },
+
+      Opcode::CSD => {
+        let imm = 
+          ((encoded >> 10) & 0b111) << 3 |
+          ((encoded >> 5) & 0b11) << 6;
+
+        let rs1 = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rs2 = Register::from_rd_prime(((encoded >> 2) & 0b111) as u8);
+    
+        Instruction::CS { opcode, rs1, rs2, imm }
+      },
+
+      Opcode::CADDIW => {
+        let sign_bit = (encoded >> 12) & 0b1;
+
+        let imm = 
+          (if sign_bit > 0 { 0b1111111111111111 << 5 } else { 0 }) |
+          ((encoded >> 2) & 0b11111);
+        let imm = imm as i16;
+
+        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+    
+        Instruction::CI { opcode, imm, rd }
+      },
+
+      Opcode::CLI => {
+        let sign_bit = (encoded >> 12) & 0b1;
+  
+        let imm = 
+          (if sign_bit > 0 { 0b1111111111111111 << 5 } else { 0 }) |
+          ((encoded >> 2) & 0b11111);
+        let imm = imm as i16;
+  
+        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+    
+        Instruction::CI { opcode, imm, rd }
+      },
+      
+      Opcode::CLUI => {
+        let sign_bit = (encoded >> 12) & 0b1;
+  
+        let imm = 
+          (if sign_bit > 0 { 0b1111111111 << 7 } else { 0 }) |
+          ((encoded >> 2) & 0b11111);
+        let imm = imm as i16;
+  
+        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+    
+        Instruction::CI { opcode, imm, rd }
+      },
 
       _ => unimplemented!("compressed opcode {:#?}", opcode)
     }
@@ -1002,23 +1134,54 @@ impl Instruction {
         encode_16bits(
           ((opcode.funct3_field() as u16) << 13) |
           (((*imm as u16 >> 2) & 0b11111111) << 5) |
-          ((rd.encode() as u16 - 8) << 2) |
+          ((rd.encode_prime() as u16) << 2) |
           opcode.opcode_field() as u16
         )
       ),
 
-      Instruction::CI { opcode, imm } => (
-        todo!()
+      Instruction::CNOP => encode_16bits(0x00000001),
+
+      Instruction::CS { opcode, rs1, rs2, imm } => (
+        encode_16bits(
+          ((opcode.funct3_field() as u16) << 13) |
+            ((*imm >> 3 & 0b111) << 10) |
+            (rs1.encode_prime() << 7) |
+            ((*imm >> 2 & 0b1) << 6) | ((*imm >> 3 & 0b1) << 5) |
+            (rs2.encode_prime() << 2) |
+            (opcode.opcode_field() as u16)
+        )
       ),
 
-      Instruction::CNOP => encode_16bits(0x00000001),
+      Instruction::CL { opcode, rs1, rd, imm } => (
+        encode_16bits(
+          ((opcode.funct3_field() as u16) << 13) |
+          ((*imm >> 3 & 0b111) << 10) |
+          (rs1.encode_prime() << 7) |
+          ((*imm >> 2 & 0b1) << 6) | ((*imm >> 3 & 0b1) << 5) |
+          (rd.encode_prime() << 2) |
+          (opcode.opcode_field() as u16)
+        )
+      ),
+
+      Instruction::CI { opcode, imm, rd } => {
+        encode_16bits(
+          ((opcode.funct3_field() as u16) << 13) |
+          (((*imm as u16 >> 5) & 0b1) << 12) |
+          ((rd.encode_prime() as u16) << 7) |
+          ((*imm as u16 & 0b11111) << 2) |
+          opcode.opcode_field() as u16
+        )
+      },
+
     }
   }
 
   pub fn width_bytes(&self) -> u64 {
     match self {      
       Instruction::CIW { opcode: _, rd: _, imm: _ } |
-      Instruction::CI { opcode: _, imm: _ } |
+      Instruction::CS { opcode: _, rs1: _, rs2: _, imm: _ } |
+      Instruction::CL { opcode: _, rs1: _, rd: _, imm: _ } |
+      Instruction::CI { opcode: _, rd: _, imm: _ } |
       Instruction::CNOP => 2,
 
       Instruction::R { opcode: _, rd: _, rs1: _, rs2: _ } | 

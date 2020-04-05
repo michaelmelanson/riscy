@@ -56,7 +56,7 @@ impl <S: Subsystem> RiscvMachine<S> {
 
   pub fn subsystem(&self) -> S { S::default() }
 
-  pub fn state(&mut self) -> &RiscvMachineContext {
+  pub fn state(&self) -> &RiscvMachineContext {
     self.contexts.get(&self.current_context).expect("Invalid context")
   }
 
@@ -380,14 +380,84 @@ impl <S: Subsystem> RiscvMachine<S> {
         _ => unimplemented!("CIW-type opcode {:?}", opcode)
       },
 
-      Instruction::CI { opcode, imm } => match opcode {
+      Instruction::CL { opcode, rs1, rd, imm } => match opcode {
+        Opcode::CLW | Opcode::CLD => {
+          let base = self.state().registers.get(rs1);
+          let offset = imm as u64;
+          let address = base.wrapping_add(offset);
+
+          let value = match opcode {
+            Opcode::CLW => self.load_word(address),
+            Opcode::CLD => self.load_double_word(address),
+            _ => unimplemented!("opcode {:?} in load", opcode)
+          };
+
+          log::debug!("{:#016x}: {:?} loaded {:#016x} ({}) from {:#016x} + {:#016x} ({}) = {:#016x}", pc, opcode, value, value as i64, base, offset, offset, address);
+
+          self.state_mut().registers.set(rd, value);
+        },
+
+        _ => unimplemented!("CL-type opcode {:?}", opcode)
+      },
+
+      Instruction::CS { opcode, rs1, rs2, imm } => match opcode {
+        Opcode::CSW | Opcode::CSD => {
+          let base = self.state().registers.get(rs1);
+          let offset = imm as u64;
+          let address = base.wrapping_add(offset);
+          let value = self.state().registers.get(rs2);
+
+          log::debug!("{:#016x}: C.SW writing {:#016x} ({}) to {:#016x} + {:#016x} ({}) = {:#016x}", pc, value, value as i64, base, offset, offset, address);
+
+          match opcode {
+            Opcode::CSW => self.store_word(address, value),
+            Opcode::CSD => self.store_double_word(address, value),
+            _ => unimplemented!("CS storage width opcode {:?}", opcode)
+          };
+        },
+
+        _ => unimplemented!("CS-type opcode {:?}", opcode)
+      },
+
+      Instruction::CI { opcode, rd, imm } => match opcode {
         Opcode::CADDI16SP => {
-          let state = self.state_mut();
-          let source = state.registers.get(Register::StackPointer);
+          let source = self.state().registers.get(rd);
           let result = source.wrapping_add(imm as u64);
 
           log::debug!("{:#016x}: C.ADDI16SP added stack pointer {:#016x} + {} = {:#016x}", pc, source, imm, result);
-          state.registers.set(Register::StackPointer, result);
+          self.state_mut().registers.set(Register::StackPointer, result);
+        },
+
+        Opcode::CADDI => {
+          let source = self.state().registers.get(rd);
+          let result = source.wrapping_add(imm as u64);
+
+          log::debug!("{:#016x}: C.ADDI added {:#016x} + {} = {:#016x}", pc, source, imm, result);
+          self.state_mut().registers.set(rd, result);
+        },
+
+        Opcode::CADDIW => {
+          let source = self.state().registers.get(rd) as u32;
+          let result = if imm < 0 { 
+            source.wrapping_sub(-imm as u32)
+          } else {
+            source.wrapping_add(imm as u32)
+          } as i64 as u64;
+
+          log::debug!("{:#016x}: C.ADDIW added {:#016x} + {} = {:#016x}", pc, source, imm, result);
+          self.state_mut().registers.set(rd, result);
+        },
+
+        Opcode::CLI => {
+          let imm = imm as u64;
+          self.state_mut().registers.set(rd, imm);
+          log::debug!("{:#016x}: C.LI loaded {:#016x} into {:?}", pc, imm, rd);
+        },
+
+        Opcode::CLUI => {
+          let imm = ((imm as i64) << 12) as u64;
+          self.state_mut().registers.set(rd, imm);
+          log::debug!("{:#016x}: C.LUI loaded {:#016x} into {:?}", pc, imm, rd);
         },
 
         _ => unimplemented!("CI-type opcode {:?}", opcode)
