@@ -480,6 +480,25 @@ impl <S: Subsystem> RiscvMachine<S> {
 
         self.state_mut().registers.set(rd, result);
       },
+
+      Instruction::CA { opcode, rs2, rd } => {
+        let lhs = self.state().registers.get(rd);
+        let rhs = self.state().registers.get(rs2);
+
+        let result = match opcode {
+          Opcode::CAND => lhs & rhs,
+          Opcode::COR => lhs | rhs,
+          Opcode::CXOR => lhs ^ rhs,
+          Opcode::CSUB => lhs.wrapping_sub(rhs),
+          Opcode::CADDW => (lhs as u32 as i32).wrapping_add(rhs as u32 as i32) as i64 as u64,
+          Opcode::CSUBW => (lhs as u32 as i32).wrapping_sub(rhs as u32 as i32) as i64 as u64,
+          _ => unimplemented!("CB-type operator {:?}", opcode)
+        };
+
+        log::debug!("{:#016x}: Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, lhs, opcode, rhs, rhs, result);
+
+        self.state_mut().registers.set(rd, result);
+      },
     };
 
     self.state_mut().pc = next_instruction;

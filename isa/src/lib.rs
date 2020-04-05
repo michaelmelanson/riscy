@@ -55,6 +55,7 @@ pub enum Opcode {
   CANDI,
   CSUB,
   CXOR,
+  COR,
   CAND,
   CSUBW,
   CADDW
@@ -85,12 +86,19 @@ impl Opcode {
         Opcode::CLUI
       },
       (0b100, 0b01) => {
-        let func = (base >> 10) & 0b11;
-        match func {
-          0b00 => Opcode::CSRLI,
-          0b01 => Opcode::CSRAI,
-          0b10 => Opcode::CANDI,
-          _ => todo!("compressed arithmetic function with func={:#02b}", func)
+        let func3 = (base >> 10) & 0b111;
+        let func2 = (base >> 5) & 0b11;
+        match (func3, func2) {
+          (0b000, _) => Opcode::CSRLI,
+          (0b001, _) => Opcode::CSRAI,
+          (0b010, _) | (0b110, _) => Opcode::CANDI,
+          (0b011, 0b00) => Opcode::CSUB,
+          (0b011, 0b01) => Opcode::CXOR,
+          (0b011, 0b10) => Opcode::COR,
+          (0b011, 0b11) => Opcode::CAND,
+          (0b111, 0b00) => Opcode::CSUBW,
+          (0b111, 0b01) => Opcode::CADDW,
+          _ => todo!("compressed arithmetic function with func=({:#03b}, {:#02b}", func3, func2)
         }
       },
 
@@ -187,6 +195,7 @@ impl Opcode {
       Opcode::CANDI     => 0b01,
       Opcode::CSUB      => 0b01,
       Opcode::CXOR      => 0b01,
+      Opcode::COR       => 0b01,
       Opcode::CAND      => 0b01,
       Opcode::CSUBW     => 0b01,
       Opcode::CADDW      => 0b01,
@@ -803,6 +812,7 @@ pub enum Instruction {
   CI { opcode: Opcode, rd: Register, imm: i64 },
   CNOP,
   CB { opcode: Opcode, rd: Register, imm: i16 },
+  CA { opcode: Opcode, rd: Register, rs2: Register },
 }
 
 impl Instruction {
@@ -932,6 +942,13 @@ impl Instruction {
 
         Instruction::CB { opcode, imm, rd }
       },
+
+      Opcode::CAND | Opcode::COR | Opcode::CXOR | Opcode::CSUB | Opcode::CADDW | Opcode::CSUBW => {
+        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rs2 = Register::from_rd_prime(((encoded >> 2) & 0b111) as u8);
+
+        Instruction::CA { opcode, rd, rs2 }
+      }
 
       _ => unimplemented!("compressed opcode {:#?}", opcode)
     }
@@ -1200,8 +1217,8 @@ impl Instruction {
         )
       },
 
-      Instruction::CB { opcode: _, imm: _, rd: _ } => todo!("encoding for CB-type")
-
+      Instruction::CB { opcode: _, imm: _, rd: _ } => todo!("encoding for CB-type"),
+      Instruction::CA { opcode: _, rd: _, rs2: _ } => todo!("encoding for CB-type"),
     }
   }
 
@@ -1212,7 +1229,8 @@ impl Instruction {
       Instruction::CL { opcode: _, rs1: _, rd: _, imm: _ } |
       Instruction::CI { opcode: _, rd: _, imm: _ } |
       Instruction::CNOP |
-      Instruction::CB { opcode: _, rd: _, imm: _ } => 2,
+      Instruction::CB { opcode: _, rd: _, imm: _ } |
+      Instruction::CA { opcode: _, rd: _, rs2: _ }  => 2,
 
       Instruction::R { opcode: _, rd: _, rs1: _, rs2: _ } | 
       Instruction::I { opcode: _, rd: _, rs1: _, imm: _ } | 
