@@ -455,7 +455,7 @@ impl <S: Subsystem> RiscvMachine<S> {
         },
 
         Opcode::CLUI => {
-          let imm = ((imm as i64) << 12) as u64;
+          let imm = (imm as u64) << 12;
           self.state_mut().registers.set(rd, imm);
           log::debug!("{:#016x}: C.LUI loaded {:#016x} into {:?}", pc, imm, rd);
         },
@@ -464,6 +464,22 @@ impl <S: Subsystem> RiscvMachine<S> {
       },
 
       Instruction::CNOP => {},
+
+      Instruction::CB { opcode, rd, imm } => {
+        let lhs = self.state().registers.get(rd);
+        let rhs = imm;
+
+        let result = match opcode {
+          Opcode::CSRLI => lhs.overflowing_shr(rhs as i32 as u32).0 as u64,
+          Opcode::CSRAI => (lhs as i64).overflowing_shr(rhs as i32 as u32).0 as u64,
+          Opcode::CANDI => lhs & (rhs as i64 as u64),
+          _ => unimplemented!("CB-type function {:?}", opcode)
+        };
+
+        log::debug!("{:#016x}: Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, lhs, opcode, rhs, rhs, result);
+
+        self.state_mut().registers.set(rd, result);
+      },
     };
 
     self.state_mut().pc = next_instruction;

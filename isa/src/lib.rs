@@ -50,6 +50,14 @@ pub enum Opcode {
   CLI,
   CADDI16SP,
   CLUI,
+  CSRLI,
+  CSRAI,
+  CANDI,
+  CSUB,
+  CXOR,
+  CAND,
+  CSUBW,
+  CADDW
 }
 
 impl Opcode {
@@ -76,6 +84,16 @@ impl Opcode {
       } else {
         Opcode::CLUI
       },
+      (0b100, 0b01) => {
+        let func = (base >> 10) & 0b11;
+        match func {
+          0b00 => Opcode::CSRLI,
+          0b01 => Opcode::CSRAI,
+          0b10 => Opcode::CANDI,
+          _ => todo!("compressed arithmetic function with func={:#02b}", func)
+        }
+      },
+
       _ => todo!("compressed instruction with op={:03b}...{:02b} from base={:016b} ({:#04x})", op_high, op_low, base, base)
     }
   }
@@ -164,6 +182,14 @@ impl Opcode {
       Opcode::CLI       => 0b01,
       Opcode::CADDI16SP => 0b01,
       Opcode::CLUI      => 0b01,
+      Opcode::CSRLI     => 0b01,
+      Opcode::CSRAI     => 0b01,
+      Opcode::CANDI     => 0b01,
+      Opcode::CSUB      => 0b01,
+      Opcode::CXOR      => 0b01,
+      Opcode::CAND      => 0b01,
+      Opcode::CSUBW     => 0b01,
+      Opcode::CADDW      => 0b01,
     }
   }
 
@@ -774,8 +800,9 @@ pub enum Instruction {
   CIW { opcode: Opcode, rd: Register, imm: u16 },
   CS { opcode: Opcode, rs1: Register, rs2: Register, imm: u16 },
   CL { opcode: Opcode, rs1: Register, rd: Register, imm: u16 },
-  CI { opcode: Opcode, rd: Register, imm: i16 },
-  CNOP
+  CI { opcode: Opcode, rd: Register, imm: i64 },
+  CNOP,
+  CB { opcode: Opcode, rd: Register, imm: i16 },
 }
 
 impl Instruction {
@@ -801,7 +828,7 @@ impl Instruction {
         let imm = 
           (if sign_bit > 0 { 0b1111111111111111u16 << 5 } else { 0 }) |
           ((encoded >> 2) & 0b11111);
-        let imm = imm as i16;
+        let imm = imm as i16 as i64;
 
         let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
     
@@ -837,7 +864,7 @@ impl Instruction {
         let sign_bit = nzuimm_9;
         let imm = ((if sign_bit > 0 { 0b1111111111111111 << 10 } else { 0 })
                      | (nzuimm_etc << 4) 
-                     | (nzuimm_9 << 9)) as i16;
+                     | (nzuimm_9 << 9)) as i16 as i64;
                 
         let rd = Register::StackPointer;
 
@@ -873,37 +900,37 @@ impl Instruction {
         let imm = 
           (if sign_bit > 0 { 0b1111111111111111 << 5 } else { 0 }) |
           ((encoded >> 2) & 0b11111);
-        let imm = imm as i16;
+        let imm = imm as i16 as i64;
 
         let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
     
         Instruction::CI { opcode, imm, rd }
       },
 
-      Opcode::CLI => {
+      Opcode::CLI | Opcode::CLUI => {
         let sign_bit = (encoded >> 12) & 0b1;
   
         let imm = 
-          (if sign_bit > 0 { 0b1111111111111111 << 5 } else { 0 }) |
-          ((encoded >> 2) & 0b11111);
-        let imm = imm as i16;
+          (if sign_bit > 0 { (-1i64 as u64) << 5 } else { 0 }) |
+          ((encoded as u64 >> 2) & 0b11111);
+        let imm = imm as i16 as i64;
   
         let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
     
         Instruction::CI { opcode, imm, rd }
       },
-      
-      Opcode::CLUI => {
+
+      Opcode::CSRLI | Opcode::CSRAI | Opcode::CANDI => {
         let sign_bit = (encoded >> 12) & 0b1;
-  
+
         let imm = 
-          (if sign_bit > 0 { 0b1111111111 << 7 } else { 0 }) |
+          (if sign_bit > 0 { (-1i16 as u16) << 5 } else { 0 }) |
           ((encoded >> 2) & 0b11111);
         let imm = imm as i16;
-  
+        
         let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
-    
-        Instruction::CI { opcode, imm, rd }
+
+        Instruction::CB { opcode, imm, rd }
       },
 
       _ => unimplemented!("compressed opcode {:#?}", opcode)
@@ -1173,6 +1200,8 @@ impl Instruction {
         )
       },
 
+      Instruction::CB { opcode: _, imm: _, rd: _ } => todo!("encoding for CB-type")
+
     }
   }
 
@@ -1182,7 +1211,8 @@ impl Instruction {
       Instruction::CS { opcode: _, rs1: _, rs2: _, imm: _ } |
       Instruction::CL { opcode: _, rs1: _, rd: _, imm: _ } |
       Instruction::CI { opcode: _, rd: _, imm: _ } |
-      Instruction::CNOP => 2,
+      Instruction::CNOP |
+      Instruction::CB { opcode: _, rd: _, imm: _ } => 2,
 
       Instruction::R { opcode: _, rd: _, rs1: _, rs2: _ } | 
       Instruction::I { opcode: _, rd: _, rs1: _, imm: _ } | 
