@@ -460,25 +460,66 @@ impl <S: Subsystem> RiscvMachine<S> {
           log::debug!("{:#016x}: C.LUI loaded {:#016x} into {:?}", pc, imm, rd);
         },
 
+        Opcode::CSLLI => {
+          let lhs = self.state().registers.get(rd);
+          let shamt = imm as u64;
+
+          let value = lhs << shamt;
+
+          log::debug!("{:#016x}: C.SLLI computed {:#016x} << {:#016x} = {:#016x}", pc, lhs, shamt, value);
+          self.state_mut().registers.set(rd, value);
+        },
+
         _ => unimplemented!("CI-type opcode {:?}", opcode)
       },
 
       Instruction::CNOP => {},
 
-      Instruction::CB { opcode, rd, imm } => {
-        let lhs = self.state().registers.get(rd);
-        let rhs = imm;
+      Instruction::CB { opcode, rs1, imm } => match opcode {
 
-        let result = match opcode {
-          Opcode::CSRLI => lhs.overflowing_shr(rhs as i32 as u32).0 as u64,
-          Opcode::CSRAI => (lhs as i64).overflowing_shr(rhs as i32 as u32).0 as u64,
-          Opcode::CANDI => lhs & (rhs as i64 as u64),
-          _ => unimplemented!("CB-type function {:?}", opcode)
-        };
+        Opcode::CSRLI | Opcode::CSRAI | Opcode::CANDI => {
+          let lhs = self.state().registers.get(rs1);
+          let rhs = imm;
 
-        log::debug!("{:#016x}: Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, lhs, opcode, rhs, rhs, result);
+          let result = match opcode {
+            Opcode::CSRLI => lhs.overflowing_shr(rhs as i32 as u32).0 as u64,
+            Opcode::CSRAI => (lhs as i64).overflowing_shr(rhs as i32 as u32).0 as u64,
+            Opcode::CANDI => lhs & (rhs as i64 as u64),
+            _ => unimplemented!("CB-type arithmetic function {:?}", opcode)
+          };
 
-        self.state_mut().registers.set(rd, result);
+          log::debug!("{:#016x}: Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, lhs, opcode, rhs, rhs, result);
+
+          self.state_mut().registers.set(rs1, result);
+        },
+
+        Opcode::CBEQZ | Opcode::CBNEZ => {
+          let value = self.state().registers.get(rs1);
+
+          let matches = match opcode {
+            Opcode::CBEQZ => value == 0,
+            Opcode::CBNEZ => value != 0,
+            _ => unimplemented!("CB-type branch function {:?}", opcode)
+          };
+
+          if matches {
+            let pc = self.state().pc;
+            let offset = imm;
+            let target = if offset > 0 {
+              pc.wrapping_add(offset as u64)
+            } else {
+              pc.wrapping_sub((-offset) as u64)
+            };
+ 
+            log::debug!("{:#016x}: {:?} condition matches; jumping to {:#016x} + {:#x} ({}) = {:#016x}", pc, opcode, pc, offset, offset, target);
+            next_instruction = target;
+          } else {
+            log::debug!("{:#016x}: {:?} condition does not match (value={:#016x})", pc, opcode, value);
+
+          }
+        },
+
+        _ => unimplemented!("CB-type instruction {:?}", opcode)
       },
 
       Instruction::CA { opcode, rs2, rd } => {
@@ -499,6 +540,45 @@ impl <S: Subsystem> RiscvMachine<S> {
 
         self.state_mut().registers.set(rd, result);
       },
+
+      Instruction::CJ { opcode, imm } => {
+        let state = self.state();
+        let pc = state.pc;
+        let offset = imm;
+
+        let target = if offset > 0 {
+          pc.wrapping_add(offset as u64)
+        } else {
+          pc.wrapping_sub((-offset) as u64)
+        };
+
+        log::debug!("{:#016x}: {:?} jumping to {:#016x} + {:#x} ({}) = {:#016x}", pc, opcode, pc, offset, offset, target);
+        next_instruction = target;
+
+        match opcode {
+          Opcode::CJ => {},
+          _ => unimplemented!("CJ-type behaviour for {:?}", opcode)
+        }
+      },
+
+      Instruction::CR { opcode, rs1 } => match opcode {
+        Opcode::CJR => {
+          let address = self.state().registers.get(rs1);
+          log::debug!("{:#016x}: C.JR jumping to {:#016x}", pc, address);
+          next_instruction = address;
+        },
+
+        Opcode::CJALR => {
+          let address = self.state().registers.get(rs1);
+          let link = next_instruction;
+
+          log::debug!("{:#016x}: C.JALR jumping to {:#016x} with link {:#016x}", pc, address, link);
+          self.state_mut().registers.set(Register::ReturnAddress, link);
+          next_instruction = address;
+        },
+
+        _ => unimplemented!("CR-type instruction {:?}", opcode)
+      }
     };
 
     self.state_mut().pc = next_instruction;

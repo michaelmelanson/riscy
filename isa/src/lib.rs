@@ -58,7 +58,14 @@ pub enum Opcode {
   COR,
   CAND,
   CSUBW,
-  CADDW
+  CADDW,
+  CJ,
+  CBEQZ,
+  CBNEZ,
+  CSLLI,
+  CJR,
+  CBREAK,
+  CJALR,
 }
 
 impl Opcode {
@@ -101,6 +108,22 @@ impl Opcode {
           _ => todo!("compressed arithmetic function with func=({:#03b}, {:#02b}", func3, func2)
         }
       },
+      (0b101, 0b01) => Opcode::CJ,
+      (0b110, 0b01) => Opcode::CBEQZ,
+      (0b111, 0b01) => Opcode::CBNEZ,
+      (0b000, 0b10) => Opcode::CSLLI,
+      (0b100, 0b10) => {
+        let func12 = (base >> 12) & 0b1;
+        let func11_7 = (base >> 7) & 0b11111;
+        let func6_2 = (base >> 2) & 0b11111;
+
+        match (func12, func11_7, func6_2) {
+          (0b0, _, 0b00000) => Opcode::CJR,
+          (0b1, 0b0, 0b00000) => unimplemented!("C.EBREAK"),
+          (0b1, _, 0b00000) => Opcode::CJALR,
+          spec => unimplemented!("compressed opcode 100...10 with func ({:?})", spec)
+        }
+      },
 
       _ => todo!("compressed instruction with op={:03b}...{:02b} from base={:016b} ({:#04x})", op_high, op_low, base, base)
     }
@@ -111,7 +134,7 @@ impl Opcode {
     match opcode {
       0b0000011 => Opcode::Load(LoadWidth::from_func3(func3)),
       0b0000111 => Opcode::LoadFp,
-      0b0001011 => Opcode::Custom0,
+      0b0001011 => unimplemented!("Custom 0"),
       0b0001111 => Opcode::MiscMem(MiscMemFunction::from_func3(func3)),
       0b0010011 => Opcode::OpImm(OpImmFunction::from_imm11_0_func3(imm11_0, func3)),
       0b0010111 => Opcode::AuiPc,
@@ -119,7 +142,7 @@ impl Opcode {
 
       0b0100011 => Opcode::Store(StoreWidth::from_func3(func3)),
       0b0100111 => Opcode::StoreFp,
-      0b0101011 => Opcode::Custom1,
+      0b0101011 => unimplemented!("Custom 1"),
       0b0101111 => Opcode::Amo,
       0b0110011 => Opcode::Op(OpFunction::from_func3_func7(func3, func7)),
       0b0110111 => Opcode::Lui,
@@ -130,16 +153,16 @@ impl Opcode {
       0b1001011 => Opcode::NMSub,
       0b1001111 => Opcode::NMAdd,
       0b1010011 => Opcode::OpFp,
-      0b1010111 => Opcode::Reserved0,
-      0b1011011 => Opcode::Custom2,
+      0b1010111 => unimplemented!("Reserved 0"),
+      0b1011011 => unimplemented!("Custom 2"),
 
       0b1100011 => Opcode::Branch(BranchOperation::from_func3(func3)),
       0b1100111 => Opcode::JAlr,
-      0b1101011 => Opcode::Reserved1,
+      0b1101011 => unimplemented!("Reserved 1"),
       0b1101111 => Opcode::JAl,
       0b1110011 => Opcode::System(SystemFunction::from_func3_imm11_0(func3, imm11_0)),
-      0b1110111 => Opcode::Reserved2,
-      0b1111011 => Opcode::Custom3,
+      0b1110111 => unimplemented!("Reserved 2"),
+      0b1111011 => unimplemented!("Custom 3"),
 
       _ => panic!("Unknown opcode")
     }
@@ -198,7 +221,14 @@ impl Opcode {
       Opcode::COR       => 0b01,
       Opcode::CAND      => 0b01,
       Opcode::CSUBW     => 0b01,
-      Opcode::CADDW      => 0b01,
+      Opcode::CADDW     => 0b01,
+      Opcode::CJ        => 0b01,
+      Opcode::CBEQZ     => 0b01,
+      Opcode::CBNEZ     => 0b01,
+      Opcode::CSLLI     => 0b10,
+      Opcode::CJR       => 0b10,
+      Opcode::CBREAK    => 0b10,
+      Opcode::CJALR     => 0b10,
     }
   }
 
@@ -811,8 +841,10 @@ pub enum Instruction {
   CL { opcode: Opcode, rs1: Register, rd: Register, imm: u16 },
   CI { opcode: Opcode, rd: Register, imm: i64 },
   CNOP,
-  CB { opcode: Opcode, rd: Register, imm: i16 },
+  CB { opcode: Opcode, rs1: Register, imm: i16 },
   CA { opcode: Opcode, rd: Register, rs2: Register },
+  CJ { opcode: Opcode, imm: i16 },
+  CR { opcode: Opcode, rs1: Register },
 }
 
 impl Instruction {
@@ -832,7 +864,7 @@ impl Instruction {
 
       Opcode::CNOP => Instruction::CNOP,
 
-      Opcode::CADDI => {
+      Opcode::CADDI | Opcode::CSLLI => {
         let sign_bit = (encoded >> 12) & 0b1;
 
         let imm = 
@@ -925,12 +957,12 @@ impl Instruction {
           ((encoded as u64 >> 2) & 0b11111);
         let imm = imm as i16 as i64;
   
-        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rd = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
     
         Instruction::CI { opcode, imm, rd }
       },
 
-      Opcode::CSRLI | Opcode::CSRAI | Opcode::CANDI => {
+      Opcode::CSRLI | Opcode::CSRAI | Opcode::CANDI | Opcode::CBEQZ | Opcode::CBNEZ => {
         let sign_bit = (encoded >> 12) & 0b1;
 
         let imm = 
@@ -938,9 +970,9 @@ impl Instruction {
           ((encoded >> 2) & 0b11111);
         let imm = imm as i16;
         
-        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rs1 = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
 
-        Instruction::CB { opcode, imm, rd }
+        Instruction::CB { opcode, imm, rs1 }
       },
 
       Opcode::CAND | Opcode::COR | Opcode::CXOR | Opcode::CSUB | Opcode::CADDW | Opcode::CSUBW => {
@@ -949,6 +981,20 @@ impl Instruction {
 
         Instruction::CA { opcode, rd, rs2 }
       }
+
+      Opcode::CJ => {
+        let sign_bit = (encoded >> 12) & 0b1;
+        let imm = 
+          (if sign_bit > 0 { (-1i16 as u16) << 5 } else { 0 }) |
+          (encoded >> 2) & 0b1111111111;
+
+        Instruction::CJ { opcode, imm: imm as i16 }
+      },
+
+      Opcode::CJR | Opcode::CJALR => {
+        let rs1 = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
+        Instruction::CR { opcode, rs1 }
+      },
 
       _ => unimplemented!("compressed opcode {:#?}", opcode)
     }
@@ -1217,8 +1263,11 @@ impl Instruction {
         )
       },
 
-      Instruction::CB { opcode: _, imm: _, rd: _ } => todo!("encoding for CB-type"),
+      Instruction::CB { opcode: _, imm: _, rs1: _ } => todo!("encoding for CB-type"),
       Instruction::CA { opcode: _, rd: _, rs2: _ } => todo!("encoding for CB-type"),
+      Instruction::CJ { opcode: _, imm: _ } => todo!("encoding for CB-type"),
+      Instruction::CR { opcode: _, rs1: _ } => todo!("encoding for CR-type")
+      
     }
   }
 
@@ -1229,8 +1278,10 @@ impl Instruction {
       Instruction::CL { opcode: _, rs1: _, rd: _, imm: _ } |
       Instruction::CI { opcode: _, rd: _, imm: _ } |
       Instruction::CNOP |
-      Instruction::CB { opcode: _, rd: _, imm: _ } |
-      Instruction::CA { opcode: _, rd: _, rs2: _ }  => 2,
+      Instruction::CB { opcode: _, rs1: _, imm: _ } |
+      Instruction::CA { opcode: _, rd: _, rs2: _ } |
+      Instruction::CJ { opcode: _, imm: _ } |
+      Instruction::CR { opcode: _, rs1: _ } => 2,
 
       Instruction::R { opcode: _, rd: _, rs1: _, rs2: _ } | 
       Instruction::I { opcode: _, rd: _, rs1: _, imm: _ } | 
