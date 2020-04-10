@@ -58,11 +58,15 @@ fn main()  -> Result<(), RiscvMachineError> {
   for ph in binary.program_headers {
     let header_bytes = &file[ph.file_range()];
 
+    log::debug!("Loading header from {:?} into {:#016x}", ph.file_range(), ph.p_vaddr);
+
     for (offset, byte) in header_bytes.iter().enumerate() {
       let address = (ph.p_vaddr as usize) + (offset as usize);
       memory.physical()[address] = *byte;
     }
   }
+
+  log::debug!("Entry point is {:#016x}", binary.header.e_entry);
 
   match subsystem {
     "selfie" => run_machine::<Selfie>(memory, binary.header.e_entry),

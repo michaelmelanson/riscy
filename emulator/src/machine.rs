@@ -162,7 +162,7 @@ impl <S: Subsystem> RiscvMachine<S> {
           // clear the low-order bit
           let target = target & !0b1;
 
-          log::trace!("{:#016x}: Jumping to {:#08x} + {} = {:#08x} with link {:#08x}", pc, base, offset, target, link);
+          log::debug!("{:#016x}: JAlr jumping to {:#08x} + {} = {:#08x} with link {:#08x}", pc, base, offset, target, link);
           self.state_mut().registers.set(rd, link);
           next_instruction = target;
         },
