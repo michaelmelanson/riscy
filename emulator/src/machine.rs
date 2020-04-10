@@ -81,7 +81,7 @@ impl <S: Subsystem> RiscvMachine<S> {
 
   fn execute_instruction(&mut self, instruction: Instruction) -> RiscvMachineStepResult {
     let pc = self.state().pc;
-    log::debug!("{:#016x}: Executing {:?}", pc, instruction);
+    log::trace!("{:#016x}: Executing {:?}", pc, instruction);
 
     let mut action = RiscvMachineStepAction::ExecutedInstruction { instruction };
     let mut next_instruction = pc + instruction.width_bytes();
@@ -116,7 +116,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             _ => unimplemented!("Op function {:?}", function)
           };
 
-          log::debug!("Op: {:#016x} ({}) {:?} {:#016x} ({}) = {:#016x} ({})", lhs, lhs, function, rhs, rhs, result, result);
+          log::debug!("{:#016x}: Op computed {:#016x} ({}) = {:#016x} ({}) {:?} {:#016x} ({})", pc, result, result as i64, lhs, lhs as i64, function, rhs, rhs as i64);
           registers.set(rd, result as u64);
         },
 
@@ -212,7 +212,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             OpImmFunction::XORI => lhs ^ rhs,
           };
 
-          log::debug!("OP-IMM: {:#016x} ({}) {:?} {:#016x} ({}, shamount={}) = {:#016x} ({})", lhs, lhs as i64, function, rhs, rhs as i64, shamount, value, value as i64);
+          log::debug!("{:#016x}: OP-IMM computed {:#016x} ({}) = {:#016x} ({}) {:?} {:#016x} ({}, shamount={})", pc, value, value as i64, lhs, lhs as i64, function, rhs, rhs as i64, shamount);
           self.state_mut().registers.set(rd, value);
         },
 
@@ -313,10 +313,10 @@ impl <S: Subsystem> RiscvMachine<S> {
               self.state().pc.wrapping_sub((-imm) as u64)
             };
 
-            log::trace!("{:#016x}: Branching to {:#016x} on condition ({:#016x} {:?} {:#016x}) ", pc, target, lhs, operation, rhs);
+            log::debug!("{:#016x}: Branching to {:#016x} on condition ({:#016x} {:?} {:#016x}) ", pc, target, lhs, operation, rhs);
             next_instruction = target;
           } else {
-            log::trace!("{:#016x}: Branch condition ({:#08x} {:?} {:#08x}) did not match", pc, lhs, operation, rhs);
+            log::debug!("{:#016x}: Branch condition ({:#08x} {:?} {:#08x}) did not match", pc, lhs, operation, rhs);
           }
         },
 
@@ -329,7 +329,7 @@ impl <S: Subsystem> RiscvMachine<S> {
           let pc = state.pc as u64;
           let offset = imm as u64;
           let value = pc.wrapping_add(offset);
-          log::debug!("AUIPC: pc={:#016x}, imm={:#016x}, offset={:#016x}, value={:#016x}", pc, imm, offset, value);
+          log::debug!("{:#016x}: AUIPC computed value {:#016x} = {:#016x} + {:#016x} ({})", pc, value, pc, offset, offset);
           state.registers.set(rd, value as u64);
         },
 
@@ -481,7 +481,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             _ => unimplemented!("CI-type load width {:?}", opcode)
           };
 
-          log::debug!("{:#016x}: C.LWSP loaded {:#016x} from {:#016x} (SP) + {:#016x} = {:#016x}", pc, value, base, offset, address);
+          log::debug!("{:#016x}: {:?} loaded {:#016x} from {:#016x} (SP) + {:#016x} ({}) = {:#016x}", pc, opcode, value, base, offset, offset, address);
           self.state_mut().registers.set(rd, value);
         },
 
@@ -503,7 +503,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             _ => unimplemented!("CB-type arithmetic function {:?}", opcode)
           };
 
-          log::debug!("{:#016x}: Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, lhs, opcode, rhs, rhs, result);
+          log::debug!("{:#016x}: {:?} Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, opcode, lhs, opcode, rhs, rhs, result);
 
           self.state_mut().registers.set(rs1, result);
         },
@@ -551,7 +551,7 @@ impl <S: Subsystem> RiscvMachine<S> {
           _ => unimplemented!("CB-type operator {:?}", opcode)
         };
 
-        log::debug!("{:#016x}: Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, lhs, opcode, rhs, rhs, result);
+        log::debug!("{:#016x}: {:?} Computed {:#016x} {:?} {:#x} ({}) = {:#016x}", pc, opcode, lhs, opcode, rhs, rhs, result);
 
         self.state_mut().registers.set(rd, result);
       },
@@ -600,12 +600,12 @@ impl <S: Subsystem> RiscvMachine<S> {
         },
 
         Opcode::CADD => {
-          let lhs = self.state().registers.get(rd);
-          let rhs = self.state().registers.get(rs2);
+          let lhs = self.state().registers.get(rd) as i64;
+          let rhs = self.state().registers.get(rs2) as i64;
           let value = lhs.wrapping_add(rhs);
 
           log::debug!("{:#016x}: C.CADD computed {:#016x} ({}) = {:#016x} ({}) + {:#016x} ({})", pc, value, value, lhs, lhs, rhs, rhs);
-          self.state_mut().registers.set(rd, value)
+          self.state_mut().registers.set(rd, value as u64)
 
         },
 

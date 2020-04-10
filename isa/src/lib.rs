@@ -111,7 +111,7 @@ impl Opcode {
           (0b011, 0b11) => Opcode::CAND,
           (0b111, 0b00) => Opcode::CSUBW,
           (0b111, 0b01) => Opcode::CADDW,
-          _ => todo!("compressed arithmetic function with func=({:#03b}, {:#02b}", func3, func2)
+          _ => todo!("compressed arithmetic function with func=({:#03b}, {:#02b})", func3, func2)
         }
       },
       (0b101, 0b01) => Opcode::CJ,
@@ -983,7 +983,7 @@ impl Instruction {
     
         Instruction::CI { opcode, imm, rd }
       },
-
+      
       Opcode::CLWSP => {
         let offset_5 = ((encoded >> 12) & 0b1) << 5;
         let offset_4_2 = ((encoded >> 4) & 0b111) << 2;
@@ -1012,11 +1012,16 @@ impl Instruction {
       },
 
       Opcode::CSRLI | Opcode::CSRAI | Opcode::CANDI | Opcode::CBEQZ | Opcode::CBNEZ => {
-        let sign_bit = (encoded >> 12) & 0b1;
-
+        let offset_8 = ((encoded >> 12) & 0b1) << 8;
+        let offset_4_3 = ((encoded >> 10) & 0b11) << 3;
+        let offset_7_6 = ((encoded >> 5) & 0b11) << 6;
+        let offset_2_1 = ((encoded >> 3) & 0b11) << 1;
+        let offset_5 = ((encoded >> 2) & 0b1) << 5;
+        
+        let sign_bit = offset_8;
         let imm = 
-          (if sign_bit > 0 { (-1i16 as u16) << 5 } else { 0 }) |
-          ((encoded >> 2) & 0b11111);
+          (if sign_bit > 0 { (-1i16 as u16) << 9 } else { 0 }) |
+          offset_8 | offset_4_3 | offset_7_6 | offset_2_1 | offset_5;
         let imm = imm as i16;
         
         let rs1 = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
@@ -1032,10 +1037,19 @@ impl Instruction {
       }
 
       Opcode::CJ => {
-        let sign_bit = (encoded >> 12) & 0b1;
+        let offset_11  = ((encoded >> 12) & 0b1) << 11;
+        let offset_4   = ((encoded >> 11) & 0b1) << 4;
+        let offset_9_8 = ((encoded >> 9)  & 0b11) << 8;
+        let offset_10  = ((encoded >> 8)  & 0b1) << 10;
+        let offset_6   = ((encoded >> 7)  & 0b1) << 6;
+        let offset_7   = ((encoded >> 6)  & 0b1) << 7;
+        let offset_3_1 = ((encoded >> 3)  & 0b111) << 1;
+        let offset_5   = ((encoded >> 2)  & 0b1) << 5;
+
+        let sign_bit = offset_11 != 0;
         let imm = 
-          (if sign_bit > 0 { (-1i16 as u16) << 5 } else { 0 }) |
-          (encoded >> 2) & 0b1111111111;
+          (if sign_bit { (-1i16 as u16) << 12 } else { 0 }) |
+          offset_11 | offset_4 | offset_9_8 | offset_10 | offset_6 | offset_7 | offset_3_1 | offset_5;
 
         Instruction::CJ { opcode, imm: imm as i16 }
       },

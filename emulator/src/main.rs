@@ -58,7 +58,7 @@ fn main()  -> Result<(), RiscvMachineError> {
   for ph in binary.program_headers {
     let header_bytes = &file[ph.file_range()];
 
-    log::debug!("Loading header from {:?} into {:#016x}", ph.file_range(), ph.p_vaddr);
+    log::debug!("Loading header {:?} from {:?} into {:#016x}", ph, ph.file_range(), ph.p_vaddr);
 
     for (offset, byte) in header_bytes.iter().enumerate() {
       let address = (ph.p_vaddr as usize) + (offset as usize);
