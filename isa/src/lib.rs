@@ -971,13 +971,40 @@ impl Instruction {
         Instruction::CI { opcode, imm, rd }
       },
 
-      Opcode::CLI | Opcode::CLUI | Opcode::CLWSP | Opcode::CLDSP => {
+      Opcode::CLI | Opcode::CLUI => {
         let sign_bit = (encoded >> 12) & 0b1;
   
         let imm = 
           (if sign_bit > 0 { (-1i64 as u64) << 5 } else { 0 }) |
           ((encoded as u64 >> 2) & 0b11111);
         let imm = imm as i16 as i64;
+  
+        let rd = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
+    
+        Instruction::CI { opcode, imm, rd }
+      },
+
+      Opcode::CLWSP => {
+        let offset_5 = ((encoded >> 12) & 0b1) << 5;
+        let offset_4_2 = ((encoded >> 4) & 0b111) << 2;
+        let offset_7_6 = ((encoded >> 2) & 0b11) << 6;
+  
+        let imm = offset_5 | offset_4_2 | offset_7_6;
+        let imm = imm as u64 as i64;
+  
+        let rd = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
+    
+        Instruction::CI { opcode, imm, rd }
+      },
+
+
+      Opcode::CLDSP => {
+        let offset_5 = ((encoded >> 12) & 0b1) << 5;
+        let offset_4_3 = ((encoded >> 5) & 0b11) << 3;
+        let offset_8_6 = ((encoded >> 2) & 0b111) << 6;
+  
+        let imm = offset_5 | offset_4_3 | offset_8_6;
+        let imm = imm as u64 as i64;
   
         let rd = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
     
