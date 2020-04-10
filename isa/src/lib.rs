@@ -63,6 +63,7 @@ pub enum Opcode {
   CBEQZ,
   CBNEZ,
   CSLLI,
+  CLWSP,
   CJR,
   CBREAK,
   CJALR,
@@ -112,6 +113,7 @@ impl Opcode {
       (0b110, 0b01) => Opcode::CBEQZ,
       (0b111, 0b01) => Opcode::CBNEZ,
       (0b000, 0b10) => Opcode::CSLLI,
+      (0b010, 0b10) => Opcode::CLWSP,
       (0b100, 0b10) => {
         let func12 = (base >> 12) & 0b1;
         let func11_7 = (base >> 7) & 0b11111;
@@ -226,6 +228,7 @@ impl Opcode {
       Opcode::CBEQZ     => 0b01,
       Opcode::CBNEZ     => 0b01,
       Opcode::CSLLI     => 0b10,
+      Opcode::CLWSP     => 0b10,
       Opcode::CJR       => 0b10,
       Opcode::CBREAK    => 0b10,
       Opcode::CJALR     => 0b10,
@@ -949,7 +952,7 @@ impl Instruction {
         Instruction::CI { opcode, imm, rd }
       },
 
-      Opcode::CLI | Opcode::CLUI => {
+      Opcode::CLI | Opcode::CLUI | Opcode::CLWSP => {
         let sign_bit = (encoded >> 12) & 0b1;
   
         let imm = 

@@ -470,6 +470,15 @@ impl <S: Subsystem> RiscvMachine<S> {
           self.state_mut().registers.set(rd, value);
         },
 
+        Opcode::CLWSP => {
+          let base = self.state().registers.get(Register::StackPointer);
+          let offset = (imm as u64) * 4;
+          let value = base + offset;
+
+          log::debug!("{:#016x}: C.SLLI computed {:#016x} (SP) + {:#016x} = {:#016x}", pc, base, offset, value);
+          self.state_mut().registers.set(Register::StackPointer, value);
+        }
+
         _ => unimplemented!("CI-type opcode {:?}", opcode)
       },
 
