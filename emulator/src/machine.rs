@@ -470,12 +470,16 @@ impl <S: Subsystem> RiscvMachine<S> {
           self.state_mut().registers.set(rd, value);
         },
 
-        Opcode::CLWSP => {
+        Opcode::CLWSP | Opcode::CLDSP => {
           let base = self.state().registers.get(Register::StackPointer);
           let offset = imm as u64;
           let address = base.wrapping_add(offset);
 
-          let value = self.load_word(address);
+          let value = match opcode {
+            Opcode::CLWSP => self.load_word(address),
+            Opcode::CLDSP => self.load_double_word(address),
+            _ => unimplemented!("CI-type load width {:?}", opcode)
+          };
 
           log::debug!("{:#016x}: C.LWSP loaded {:#016x} from {:#016x} (SP) + {:#016x} = {:#016x}", pc, value, base, offset, address);
           self.state_mut().registers.set(rd, value);
@@ -591,20 +595,19 @@ impl <S: Subsystem> RiscvMachine<S> {
         _ => unimplemented!("CR-type instruction {:?}", opcode)
       },
 
-      Instruction::CSS { opcode, imm, rs2 } => match opcode {
-        Opcode::CSWSP => {
-          let base = self.state().registers.get(Register::StackPointer);
-          let offset = imm as u64;
-          let address = base.wrapping_add(offset);
-          let value = self.state().registers.get(rs2);
+      Instruction::CSS { opcode, imm, rs2 } => {
+        let base = self.state().registers.get(Register::StackPointer);
+        let offset = imm as u64;
+        let address = base.wrapping_add(offset);
+        let value = self.state().registers.get(rs2);
 
-          log::debug!("{:#016x}: C.SWSP writing {:#016x} to {:#016x} (SP) + {:#016x} = {:#016x}", pc, value, base, offset, address);
-          self.store_word(address, value);
-        },
-
-        _ => unimplemented!("CSS-type instruction {:?}", opcode)
-
-      }
+        log::debug!("{:#016x}: {:?} writing {:#016x} to {:#016x} (SP) + {:#016x} = {:#016x}", pc, opcode, value, base, offset, address);
+        match opcode {
+          Opcode::CSWSP => self.store_word(address, value),
+          Opcode::CSDSP => self.store_double_word(address, value),
+          _ => unimplemented!("CSS-type instruction {:?}", opcode)
+        };
+      },
     };
 
     self.state_mut().pc = next_instruction;

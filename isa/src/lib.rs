@@ -64,10 +64,12 @@ pub enum Opcode {
   CBNEZ,
   CSLLI,
   CLWSP,
+  CLDSP,
   CJR,
   CBREAK,
   CJALR,
   CSWSP,
+  CSDSP,
 }
 
 impl Opcode {
@@ -115,6 +117,7 @@ impl Opcode {
       (0b111, 0b01) => Opcode::CBNEZ,
       (0b000, 0b10) => Opcode::CSLLI,
       (0b010, 0b10) => Opcode::CLWSP,
+      (0b011, 0b10) => Opcode::CLDSP,
       (0b100, 0b10) => {
         let func12 = (base >> 12) & 0b1;
         let func11_7 = (base >> 7) & 0b11111;
@@ -128,6 +131,7 @@ impl Opcode {
         }
       },
       (0b110, 0b10) => Opcode::CSWSP,
+      (0b111, 0b10) => Opcode::CSDSP,
 
       _ => todo!("compressed instruction with op={:03b}...{:02b} from base={:016b} ({:#04x})", op_high, op_low, base, base)
     }
@@ -231,10 +235,12 @@ impl Opcode {
       Opcode::CBNEZ     => 0b01,
       Opcode::CSLLI     => 0b10,
       Opcode::CLWSP     => 0b10,
+      Opcode::CLDSP     => 0b10,
       Opcode::CJR       => 0b10,
       Opcode::CBREAK    => 0b10,
       Opcode::CJALR     => 0b10,
       Opcode::CSWSP     => 0b10,
+      Opcode::CSDSP     => 0b10,
     }
   }
 
@@ -956,7 +962,7 @@ impl Instruction {
         Instruction::CI { opcode, imm, rd }
       },
 
-      Opcode::CLI | Opcode::CLUI | Opcode::CLWSP => {
+      Opcode::CLI | Opcode::CLUI | Opcode::CLWSP | Opcode::CLDSP => {
         let sign_bit = (encoded >> 12) & 0b1;
   
         let imm = 
@@ -1003,7 +1009,7 @@ impl Instruction {
         Instruction::CR { opcode, rs1 }
       },
 
-      Opcode::CSWSP => {
+      Opcode::CSWSP | Opcode::CSDSP => {
         let rs2 = Register::from_u8(((encoded >> 2) & 0b11111) as u8);
         let imm = (encoded >> 7) & 0b111111;
 
