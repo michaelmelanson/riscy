@@ -462,9 +462,9 @@ impl <S: Subsystem> RiscvMachine<S> {
 
         Opcode::CSLLI => {
           let lhs = self.state().registers.get(rd);
-          let shamt = imm as u64;
+          let shamt = imm as u32;
 
-          let value = lhs << shamt;
+          let value = lhs.overflowing_shl(shamt).0;
 
           log::debug!("{:#016x}: C.SLLI computed {:#016x} << {:#016x} = {:#016x}", pc, lhs, shamt, value);
           self.state_mut().registers.set(rd, value);
