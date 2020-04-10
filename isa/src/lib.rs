@@ -66,8 +66,10 @@ pub enum Opcode {
   CLWSP,
   CLDSP,
   CJR,
+  CMV,
   CBREAK,
   CJALR,
+  CADD,
   CSWSP,
   CSDSP,
 }
@@ -125,8 +127,10 @@ impl Opcode {
 
         match (func12, func11_7, func6_2) {
           (0b0, _, 0b00000) => Opcode::CJR,
+          (0b0, _, _) => Opcode::CMV,
           (0b1, 0b0, 0b00000) => unimplemented!("C.EBREAK"),
           (0b1, _, 0b00000) => Opcode::CJALR,
+          (0b1, _, _) => Opcode::CADD,
           spec => unimplemented!("compressed opcode 100...10 with func ({:?})", spec)
         }
       },
@@ -237,8 +241,10 @@ impl Opcode {
       Opcode::CLWSP     => 0b10,
       Opcode::CLDSP     => 0b10,
       Opcode::CJR       => 0b10,
+      Opcode::CMV       => 0b10,
       Opcode::CBREAK    => 0b10,
       Opcode::CJALR     => 0b10,
+      Opcode::CADD      => 0b10,
       Opcode::CSWSP     => 0b10,
       Opcode::CSDSP     => 0b10,
     }
@@ -856,7 +862,7 @@ pub enum Instruction {
   CB { opcode: Opcode, rs1: Register, imm: i16 },
   CA { opcode: Opcode, rd: Register, rs2: Register },
   CJ { opcode: Opcode, imm: i16 },
-  CR { opcode: Opcode, rs1: Register },
+  CR { opcode: Opcode, rd: Register, rs2: Register },
   CSS { opcode: Opcode, imm: u16, rs2: Register },
 }
 
@@ -1004,9 +1010,10 @@ impl Instruction {
         Instruction::CJ { opcode, imm: imm as i16 }
       },
 
-      Opcode::CJR | Opcode::CJALR => {
-        let rs1 = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
-        Instruction::CR { opcode, rs1 }
+      Opcode::CJR | Opcode::CJALR | Opcode::CMV | Opcode::CADD => {
+        let rd = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
+        let rs2 = Register::from_u8(((encoded >> 2) & 0b11111) as u8);
+        Instruction::CR { opcode, rd, rs2 }
       },
 
       Opcode::CSWSP | Opcode::CSDSP => {
@@ -1286,7 +1293,7 @@ impl Instruction {
       Instruction::CB { opcode: _, imm: _, rs1: _ } => todo!("encoding for CB-type"),
       Instruction::CA { opcode: _, rd: _, rs2: _ } => todo!("encoding for CB-type"),
       Instruction::CJ { opcode: _, imm: _ } => todo!("encoding for CB-type"),
-      Instruction::CR { opcode: _, rs1: _ } => todo!("encoding for CR-type"),
+      Instruction::CR { opcode: _, rd: _, rs2: _ } => todo!("encoding for CR-type"),
       Instruction::CSS { opcode: _, rs2: _, imm: _ } => todo!("encoding for CSS-type"),
     }
   }
@@ -1301,7 +1308,7 @@ impl Instruction {
       Instruction::CB { opcode: _, rs1: _, imm: _ } |
       Instruction::CA { opcode: _, rd: _, rs2: _ } |
       Instruction::CJ { opcode: _, imm: _ } |
-      Instruction::CR { opcode: _, rs1: _ } |
+      Instruction::CR { opcode: _, rd: _, rs2: _ } |
       Instruction::CSS { opcode: _, imm: _, rs2: _ } => 2,
 
       Instruction::R { opcode: _, rd: _, rs1: _, rs2: _ } | 

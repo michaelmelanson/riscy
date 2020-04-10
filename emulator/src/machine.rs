@@ -576,20 +576,37 @@ impl <S: Subsystem> RiscvMachine<S> {
         }
       },
 
-      Instruction::CR { opcode, rs1 } => match opcode {
+      Instruction::CR { opcode, rd, rs2} => match opcode {
         Opcode::CJR => {
-          let address = self.state().registers.get(rs1);
+          let address = self.state().registers.get(rd);
           log::debug!("{:#016x}: C.JR jumping to {:#016x}", pc, address);
           next_instruction = address;
         },
 
+        Opcode::CMV => {
+          let value = self.state().registers.get(rs2);
+
+          log::debug!("{:#016x}: C.MV copying {:#016x} from {:?} into {:?}", pc, value, rs2, rd);
+          self.state_mut().registers.set(rd, value);
+        },
+
         Opcode::CJALR => {
-          let address = self.state().registers.get(rs1);
+          let address = self.state().registers.get(rd);
           let link = next_instruction;
 
           log::debug!("{:#016x}: C.JALR jumping to {:#016x} with link {:#016x}", pc, address, link);
           self.state_mut().registers.set(Register::ReturnAddress, link);
           next_instruction = address;
+        },
+
+        Opcode::CADD => {
+          let lhs = self.state().registers.get(rd);
+          let rhs = self.state().registers.get(rs2);
+          let value = lhs.wrapping_add(rhs);
+
+          log::debug!("{:#016x}: C.CADD computed {:#016x} ({}) = {:#016x} ({}) + {:#016x} ({})", pc, value, value, lhs, lhs, rhs, rhs);
+          self.state_mut().registers.set(rd, value)
+
         },
 
         _ => unimplemented!("CR-type instruction {:?}", opcode)
