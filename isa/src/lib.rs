@@ -102,7 +102,7 @@ impl Opcode {
         let func3 = (base >> 10) & 0b111;
         let func2 = (base >> 5) & 0b11;
         match (func3, func2) {
-          (0b000, _) => Opcode::CSRLI,
+          (0b000, _) | (0b100, _) => Opcode::CSRLI,
           (0b001, _) => Opcode::CSRAI,
           (0b010, _) | (0b110, _) => Opcode::CANDI,
           (0b011, 0b00) => Opcode::CSUB,
