@@ -884,11 +884,14 @@ impl Instruction {
       Opcode::CNOP => Instruction::CNOP,
 
       Opcode::CADDI | Opcode::CSLLI => {
-        let sign_bit = (encoded >> 12) & 0b1;
+        let nzimm_5 = ((encoded >> 12) & 0b1) << 5;
+        let nzimm_4_0 = (encoded >> 2) & 0b11111;
+
+        let sign_bit = nzimm_5 != 0;
 
         let imm = 
-          (if sign_bit > 0 { 0b1111111111111111u16 << 5 } else { 0 }) |
-          ((encoded >> 2) & 0b11111);
+          (if sign_bit { 0b1111111111111111u16 << 6 } else { 0 }) |
+          nzimm_5 | nzimm_4_0;
         let imm = imm as i16 as i64;
 
         let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
