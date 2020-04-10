@@ -472,12 +472,14 @@ impl <S: Subsystem> RiscvMachine<S> {
 
         Opcode::CLWSP => {
           let base = self.state().registers.get(Register::StackPointer);
-          let offset = (imm as u64) * 4;
-          let value = base + offset;
+          let offset = imm as u64;
+          let address = base.wrapping_add(offset);
 
-          log::debug!("{:#016x}: C.SLLI computed {:#016x} (SP) + {:#016x} = {:#016x}", pc, base, offset, value);
-          self.state_mut().registers.set(Register::StackPointer, value);
-        }
+          let value = self.load_word(address);
+
+          log::debug!("{:#016x}: C.LWSP loaded {:#016x} from {:#016x} (SP) + {:#016x} = {:#016x}", pc, value, base, offset, address);
+          self.state_mut().registers.set(rd, value);
+        },
 
         _ => unimplemented!("CI-type opcode {:?}", opcode)
       },
@@ -587,6 +589,21 @@ impl <S: Subsystem> RiscvMachine<S> {
         },
 
         _ => unimplemented!("CR-type instruction {:?}", opcode)
+      },
+
+      Instruction::CSS { opcode, imm, rs2 } => match opcode {
+        Opcode::CSWSP => {
+          let base = self.state().registers.get(Register::StackPointer);
+          let offset = imm as u64;
+          let address = base.wrapping_add(offset);
+          let value = self.state().registers.get(rs2);
+
+          log::debug!("{:#016x}: C.SWSP writing {:#016x} to {:#016x} (SP) + {:#016x} = {:#016x}", pc, value, base, offset, address);
+          self.store_word(address, value);
+        },
+
+        _ => unimplemented!("CSS-type instruction {:?}", opcode)
+
       }
     };
 
