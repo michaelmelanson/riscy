@@ -786,11 +786,11 @@ impl RiscvRegisters {
 
 #[cfg(test)]
 mod tests {
-  use crate::{subsystem::Selfie, machine::RiscvMachine, memory::Memory};
+  use crate::{subsystem::Posix, machine::RiscvMachine, memory::Memory};
 
-  fn machine() -> RiscvMachine<Selfie> {
+  fn machine() -> RiscvMachine<Posix> {
     let memory = Memory::new(0x100000);
-    RiscvMachine::<Selfie>::new(memory, 0x10000)
+    RiscvMachine::<Posix>::new(memory, 0x10000)
   }
 
   #[test]

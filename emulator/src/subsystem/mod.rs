@@ -1,7 +1,7 @@
 use crate::machine::{RiscvMachine};
 
-mod selfie;
-pub use selfie::Selfie;
+mod posix;
+pub use posix::Posix;
 
 pub enum SubsystemError {
   UnknownSystemCall(u64)

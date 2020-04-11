@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use riscy_emulator::machine::{RiscvMachine, RiscvMachineError, RiscvMachineStepAction};
-use riscy_emulator::{subsystem::{Subsystem, Selfie}, memory::Memory};
+use riscy_emulator::{subsystem::{Subsystem, Posix}, memory::Memory};
 use riscy_isa::{Register};
 
 fn main()  -> Result<(), RiscvMachineError> {
@@ -26,8 +26,8 @@ fn main()  -> Result<(), RiscvMachineError> {
       .short("s")
       .long("subsystem")
       .help("Selects which kind of machine to emulate")
-      .possible_values(&["selfie"])
-      .default_value("selfie"))
+      .possible_values(&["posix"])
+      .default_value("posix"))
     
     .arg(Arg::with_name("LOG_LEVEL")
       .short("d")
@@ -69,7 +69,7 @@ fn main()  -> Result<(), RiscvMachineError> {
   log::debug!("Entry point is {:#016x}", binary.header.e_entry);
 
   match subsystem {
-    "selfie" => run_machine::<Selfie>(memory, binary.header.e_entry),
+    "posix" => run_machine::<Posix>(memory, binary.header.e_entry),
 
     _ => panic!("Unknown subsystem {}", subsystem)
   }
