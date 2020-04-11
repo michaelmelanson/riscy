@@ -632,46 +632,50 @@ impl <S: Subsystem> RiscvMachine<S> {
     Ok(action)
   }
 
-  fn store_double_word(&mut self, address: u64, value: u64) {
-    log::debug!("{:#016x}: Writing double word {:#016x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory.physical()[address as usize + 7] = (value >> 56) as u8;
-    self.memory.physical()[address as usize + 6] = (value >> 48) as u8;
-    self.memory.physical()[address as usize + 5] = (value >> 40) as u8;
-    self.memory.physical()[address as usize + 4] = (value >> 32) as u8;
-    self.memory.physical()[address as usize + 3] = (value >> 24) as u8;
-    self.memory.physical()[address as usize + 2] = (value >> 16) as u8;
-    self.memory.physical()[address as usize + 1] = (value >> 8) as u8;
-    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
+  pub fn store_double_word(&mut self, address: u64, value: u64) {
+    log::debug!("{:#016x}: Writing double word {:#016x} ({}) to memory addresses {:#016x}-{:#016x}", self.state().pc, value, value, address, address + 7);
+    let physical = self.memory.physical();
+    physical[address as usize + 7] = (value >> 56) as u8;
+    physical[address as usize + 6] = (value >> 48) as u8;
+    physical[address as usize + 5] = (value >> 40) as u8;
+    physical[address as usize + 4] = (value >> 32) as u8;
+    physical[address as usize + 3] = (value >> 24) as u8;
+    physical[address as usize + 2] = (value >> 16) as u8;
+    physical[address as usize + 1] = (value >> 8) as u8;
+    physical[address as usize + 0] = (value >> 0) as u8;
   }
 
-  fn store_word(&mut self, address: u64, value: u64) {
+  pub fn store_word(&mut self, address: u64, value: u64) {
     log::debug!("{:#016x}: Writing word {:#08x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory.physical()[address as usize + 3] = (value >> 24) as u8;
-    self.memory.physical()[address as usize + 2] = (value >> 16) as u8;
-    self.memory.physical()[address as usize + 1] = (value >> 8) as u8;
-    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
+    let physical = self.memory.physical();
+    physical[address as usize + 3] = (value >> 24) as u8;
+    physical[address as usize + 2] = (value >> 16) as u8;
+    physical[address as usize + 1] = (value >> 8) as u8;
+    physical[address as usize + 0] = (value >> 0) as u8;
   }
 
-  fn store_halfword(&mut self, address: u64, value: u64) {
+  pub fn store_halfword(&mut self, address: u64, value: u64) {
     log::debug!("{:#016x}: Writing half-word {:#04x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory.physical()[address as usize + 1] = (value >> 8) as u8;
-    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
+    let physical = self.memory.physical();
+    physical[address as usize + 1] = (value >> 8) as u8;
+    physical[address as usize + 0] = (value >> 0) as u8;
   }
 
-  fn store_byte(&mut self, address: u64, value: u64) {
+  pub fn store_byte(&mut self, address: u64, value: u64) {
     log::debug!("{:#016x}: Writing byte {:#02x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
     self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
   }
 
   fn load_double_word(&mut self, address: u64) -> u64 {
-    let value = (self.memory.physical()[address as usize + 7] as u64) << 56
-                   | (self.memory.physical()[address as usize + 6] as u64) << 48
-                   | (self.memory.physical()[address as usize + 5] as u64) << 40
-                   | (self.memory.physical()[address as usize + 4] as u64) << 32
-                   | (self.memory.physical()[address as usize + 3] as u64) << 24
-                   | (self.memory.physical()[address as usize + 2] as u64) << 16
-                   | (self.memory.physical()[address as usize + 1] as u64) << 8
-                   | (self.memory.physical()[address as usize + 0] as u64) << 0;
+    let physical = self.memory.physical();
+    let value = (physical[address as usize + 7] as u64) << 56
+                   | (physical[address as usize + 6] as u64) << 48
+                   | (physical[address as usize + 5] as u64) << 40
+                   | (physical[address as usize + 4] as u64) << 32
+                   | (physical[address as usize + 3] as u64) << 24
+                   | (physical[address as usize + 2] as u64) << 16
+                   | (physical[address as usize + 1] as u64) << 8
+                   | (physical[address as usize + 0] as u64) << 0;
 
     log::debug!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -679,10 +683,11 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   fn load_word(&mut self, address: u64) -> u64 {
-    let value = (self.memory.physical()[address as usize + 3] as u32) << 24
-                   | (self.memory.physical()[address as usize + 2] as u32) << 16
-                   | (self.memory.physical()[address as usize + 1] as u32) << 8
-                   | (self.memory.physical()[address as usize + 0] as u32) << 0;
+    let physical = self.memory.physical();
+    let value = (physical[address as usize + 3] as u32) << 24
+                   | (physical[address as usize + 2] as u32) << 16
+                   | (physical[address as usize + 1] as u32) << 8
+                   | (physical[address as usize + 0] as u32) << 0;
 
     log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -690,10 +695,12 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   fn load_word_unsigned(&mut self, address: u64) -> u64 {
-    let value = (self.memory.physical()[address as usize + 3] as u32) << 24
-                   | (self.memory.physical()[address as usize + 2] as u32) << 16
-                   | (self.memory.physical()[address as usize + 1] as u32) << 8
-                   | (self.memory.physical()[address as usize + 0] as u32) << 0;
+    let physical = self.memory.physical();
+
+    let value = (physical[address as usize + 3] as u32) << 24
+                   | (physical[address as usize + 2] as u32) << 16
+                   | (physical[address as usize + 1] as u32) << 8
+                   | (physical[address as usize + 0] as u32) << 0;
 
     log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -701,8 +708,9 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   fn load_halfword(&mut self, address: u64) -> u64 {
-    let value = (self.memory.physical()[address as usize + 1] as u16) << 8
-                   | (self.memory.physical()[address as usize + 0] as u16) << 0;
+    let physical = self.memory.physical();
+    let value = (physical[address as usize + 1] as u16) << 8
+                   | (physical[address as usize + 0] as u16) << 0;
 
     log::debug!("{:#016x}: Loaded half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -710,8 +718,9 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   fn load_halfword_unsigned(&mut self, address: u64) -> u64 {
-    let value = (self.memory.physical()[address as usize + 1] as u16) << 8
-                   | (self.memory.physical()[address as usize + 0] as u16) << 0;
+    let physical = self.memory.physical();
+    let value = (physical[address as usize + 1] as u16) << 8
+                   | (physical[address as usize + 0] as u16) << 0;
 
     log::debug!("{:#016x}: Loaded unsigned half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -719,7 +728,8 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   fn load_byte(&mut self, address: u64) -> u64 {
-    let value = (self.memory.physical()[address as usize + 0] as u8) << 0;
+    let physical = self.memory.physical();
+    let value = (physical[address as usize + 0] as u8) << 0;
 
     log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
@@ -727,7 +737,8 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   fn load_byte_unsigned(&mut self, address: u64) -> u64 {
-    let value = (self.memory.physical()[address as usize + 0] as u8) << 0;
+    let physical = self.memory.physical();
+    let value = (physical[address as usize + 0] as u8) << 0;
 
     log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
