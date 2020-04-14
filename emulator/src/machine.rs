@@ -633,7 +633,8 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   pub fn store_double_word(&mut self, address: u64, value: u64) {
-    log::debug!("{:#016x}: Writing double word {:#016x} ({}) to memory addresses {:#016x}-{:#016x}", self.state().pc, value, value, address, address + 7);
+    log::trace!("{:#016x}: Writing double word {:#016x} ({}) to memory addresses {:#016x}-{:#016x}", self.state().pc, value, value, address, address + 7);
+
     let physical = self.memory.physical();
     physical[address as usize + 7] = (value >> 56) as u8;
     physical[address as usize + 6] = (value >> 48) as u8;
@@ -646,7 +647,7 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   pub fn store_word(&mut self, address: u64, value: u64) {
-    log::debug!("{:#016x}: Writing word {:#08x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Writing word {:#08x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
     let physical = self.memory.physical();
     physical[address as usize + 3] = (value >> 24) as u8;
     physical[address as usize + 2] = (value >> 16) as u8;
@@ -655,14 +656,14 @@ impl <S: Subsystem> RiscvMachine<S> {
   }
 
   pub fn store_halfword(&mut self, address: u64, value: u64) {
-    log::debug!("{:#016x}: Writing half-word {:#04x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Writing half-word {:#04x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
     let physical = self.memory.physical();
     physical[address as usize + 1] = (value >> 8) as u8;
     physical[address as usize + 0] = (value >> 0) as u8;
   }
 
   pub fn store_byte(&mut self, address: u64, value: u64) {
-    log::debug!("{:#016x}: Writing byte {:#02x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Writing byte {:#02x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
     self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
   }
 
@@ -677,7 +678,7 @@ impl <S: Subsystem> RiscvMachine<S> {
                    | (physical[address as usize + 1] as u64) << 8
                    | (physical[address as usize + 0] as u64) << 0;
 
-    log::debug!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value
   }
@@ -689,7 +690,7 @@ impl <S: Subsystem> RiscvMachine<S> {
                    | (physical[address as usize + 1] as u32) << 8
                    | (physical[address as usize + 0] as u32) << 0;
 
-    log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value as i32 as u64
   }
@@ -702,7 +703,7 @@ impl <S: Subsystem> RiscvMachine<S> {
                    | (physical[address as usize + 1] as u32) << 8
                    | (physical[address as usize + 0] as u32) << 0;
 
-    log::debug!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value as u64
   }
@@ -712,7 +713,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     let value = (physical[address as usize + 1] as u16) << 8
                    | (physical[address as usize + 0] as u16) << 0;
 
-    log::debug!("{:#016x}: Loaded half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Loaded half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value as i16 as u64
   }
@@ -722,7 +723,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     let value = (physical[address as usize + 1] as u16) << 8
                    | (physical[address as usize + 0] as u16) << 0;
 
-    log::debug!("{:#016x}: Loaded unsigned half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Loaded unsigned half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value as u64
   }
@@ -731,7 +732,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     let physical = self.memory.physical();
     let value = (physical[address as usize + 0] as u8) << 0;
 
-    log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
+    log::trace!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
 
     value as i8 as u64
   }
