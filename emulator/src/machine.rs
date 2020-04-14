@@ -618,7 +618,7 @@ impl <S: Subsystem> RiscvMachine<S> {
         let address = base.wrapping_add(offset);
         let value = self.state().registers.get(rs2);
 
-        log::debug!("{:#016x}: {:?} writing {:#016x} to {:#016x} (SP) + {:#016x} = {:#016x}", pc, opcode, value, base, offset, address);
+        log::debug!("{:#016x}: {:?} writing {:#016x} to {:#016x} (SP) + {:#016x} ({}) = {:#016x}", pc, opcode, value, base, offset, offset, address);
         match opcode {
           Opcode::CSWSP => self.store_word(address, value),
           Opcode::CSDSP => self.store_double_word(address, value),
