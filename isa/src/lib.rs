@@ -42,6 +42,7 @@ pub enum Opcode {
   CADDI4SPN,
   CADDI,
   CNOP,
+  CFLD,
   CLW,
   CLD,
   CSW,
@@ -87,6 +88,7 @@ impl Opcode {
       } else {
         Opcode::CADDI
       },
+      (0b001, 0b00) => Opcode::CFLD, // or is it C.LQ?
       (0b010, 0b00) => Opcode::CLW,
       (0b011, 0b00) => Opcode::CLD,
       (0b110, 0b00) => Opcode::CSW,
@@ -103,7 +105,7 @@ impl Opcode {
         let func2 = (base >> 5) & 0b11;
         match (func3, func2) {
           (0b000, _) | (0b100, _) => Opcode::CSRLI,
-          (0b001, _) => Opcode::CSRAI,
+          (0b001, _) | (0b101, _) => Opcode::CSRAI,
           (0b010, _) | (0b110, _) => Opcode::CANDI,
           (0b011, 0b00) => Opcode::CSUB,
           (0b011, 0b01) => Opcode::CXOR,
@@ -217,6 +219,7 @@ impl Opcode {
       Opcode::CADDI4SPN => 0b00,
       Opcode::CADDI     => 0b01,
       Opcode::CNOP      => 0b01,
+      Opcode::CFLD      => 0b00,
       Opcode::CLW       => 0b00,
       Opcode::CLD       => 0b00,
       Opcode::CSW       => 0b00,
@@ -903,6 +906,17 @@ impl Instruction {
     
         Instruction::CI { opcode, imm, rd }
       },
+
+      Opcode::CFLD => {
+        let uimm_5_3 = ((encoded >> 10) & 0b111) << 3;
+        let uimm_7_6 = ((encoded >> 5) & 0b11) << 6;
+        let imm = uimm_5_3 | uimm_7_6;
+
+        let rs1 = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rd = Register::from_rd_prime(((encoded >> 2) & 0b111) as u8);
+
+        Instruction::CL { opcode, rs1, rd, imm }
+      }
 
       Opcode::CLW => {
         let imm = 
