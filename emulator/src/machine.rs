@@ -19,7 +19,7 @@ impl From<SubsystemError> for RiscvMachineError {
 
 #[derive(Debug)]
 pub struct RiscvMachine<S: Subsystem> {
-  memory: Memory,
+  pub memory: Memory,
   contexts: HashMap<i32, RiscvMachineContext>,
   current_context: i32,
   halted: bool,
@@ -69,6 +69,7 @@ impl <S: Subsystem> RiscvMachine<S> {
 
   pub fn step(&mut self) -> RiscvMachineStepResult {
     let pc = self.state().pc;
+    log::debug!("Executing at {:#016x}", pc);
     let mut stream = DecodingStream::new(&self.memory.physical()[pc as usize..]);
     
     if let Some(instruction) = stream.next() {
@@ -442,7 +443,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             source.wrapping_sub(-imm as u32)
           } else {
             source.wrapping_add(imm as u32)
-          } as i64 as u64;
+          } as i32 as i64 as u64;
 
           log::debug!("{:#016x}: C.ADDIW added {:#016x} + {} = {:#016x}", pc, source, imm, result);
           self.state_mut().registers.set(rd, result);
@@ -667,7 +668,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
   }
 
-  fn load_double_word(&mut self, address: u64) -> u64 {
+  pub fn load_double_word(&mut self, address: u64) -> u64 {
     let physical = self.memory.physical();
     let value = (physical[address as usize + 7] as u64) << 56
                    | (physical[address as usize + 6] as u64) << 48
@@ -683,7 +684,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     value
   }
 
-  fn load_word(&mut self, address: u64) -> u64 {
+  pub fn load_word(&mut self, address: u64) -> u64 {
     let physical = self.memory.physical();
     let value = (physical[address as usize + 3] as u32) << 24
                    | (physical[address as usize + 2] as u32) << 16
@@ -708,7 +709,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     value as u64
   }
 
-  fn load_halfword(&mut self, address: u64) -> u64 {
+  pub fn load_halfword(&mut self, address: u64) -> u64 {
     let physical = self.memory.physical();
     let value = (physical[address as usize + 1] as u16) << 8
                    | (physical[address as usize + 0] as u16) << 0;
@@ -718,7 +719,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     value as i16 as u64
   }
 
-  fn load_halfword_unsigned(&mut self, address: u64) -> u64 {
+  pub fn load_halfword_unsigned(&mut self, address: u64) -> u64 {
     let physical = self.memory.physical();
     let value = (physical[address as usize + 1] as u16) << 8
                    | (physical[address as usize + 0] as u16) << 0;
@@ -728,7 +729,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     value as u64
   }
 
-  fn load_byte(&mut self, address: u64) -> u64 {
+  pub fn load_byte(&mut self, address: u64) -> u64 {
     let physical = self.memory.physical();
     let value = (physical[address as usize + 0] as u8) << 0;
 
@@ -737,7 +738,7 @@ impl <S: Subsystem> RiscvMachine<S> {
     value as i8 as u64
   }
 
-  fn load_byte_unsigned(&mut self, address: u64) -> u64 {
+  pub fn load_byte_unsigned(&mut self, address: u64) -> u64 {
     let physical = self.memory.physical();
     let value = (physical[address as usize + 0] as u8) << 0;
 
@@ -763,7 +764,7 @@ pub enum RiscvMachineStepAction {
 pub type RiscvMachineStepResult = Result<RiscvMachineStepAction, RiscvMachineError>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RiscvRegisters(HashMap<Register, u64>);
+pub struct RiscvRegisters(pub HashMap<Register, u64>);
 
 impl RiscvRegisters {
   pub fn new() -> Self {
