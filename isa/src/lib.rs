@@ -902,7 +902,7 @@ impl Instruction {
           nzimm_5 | nzimm_4_0;
         let imm = imm as i16 as i64;
 
-        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rd = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
     
         Instruction::CI { opcode, imm, rd }
       },
@@ -988,7 +988,7 @@ impl Instruction {
           ((encoded >> 2) & 0b11111);
         let imm = imm as i16 as i64;
 
-        let rd = Register::from_rd_prime(((encoded >> 7) & 0b111) as u8);
+        let rd = Register::from_u8(((encoded >> 7) & 0b11111) as u8);
     
         Instruction::CI { opcode, imm, rd }
       },
