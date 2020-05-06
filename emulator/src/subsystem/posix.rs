@@ -17,6 +17,39 @@ impl Subsystem for Posix {
     
     let syscall = registers.get(Register::A7);
     match syscall {
+      // close
+      57 => {
+        let fd = machine.state().registers.get(Register::A0);
+        log::info!("close(fd={})", fd);
+
+        machine.state_mut().registers.set(Register::A0, 0);
+
+        Ok(None)
+      },
+
+      // write
+      64 => {
+        let fd = machine.state().registers.get(Register::A0);
+        let base = machine.state().registers.get(Register::A1);
+        let size = machine.state().registers.get(Register::A2);
+        log::debug!("write(fd={}, size={}, base={})", fd, size, base);
+
+        let mut string = String::new();
+
+        for address in base..base+size {
+          let byte = machine.load_byte(address) as u8;
+          if byte == 0 { break; }
+
+          string.push(byte as char);
+        }
+
+        log::info!("write({}): {}", fd, string);
+        machine.state_mut().registers.set(Register::A0, size);
+
+        Ok(None)
+      },
+
+      // fstat
       80 => {
         let fd = machine.state().registers.get(Register::A0);
         let st = machine.state().registers.get(Register::A1);
