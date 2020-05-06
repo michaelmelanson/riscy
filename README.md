@@ -13,7 +13,7 @@ You can run the emulator using `cargo` and give it a file to run:
 cargo run -p emulator -- path/to/binary
 ```
 
-The binary must be a RISC-V executable in ELF format. Binaries produced by [Selfie](https://github.com/cksystemsteaching/selfie) should work, as long as they are very simple. Only a couple system calls are supported: "break" (which doesn't actually have an effect) and "exit" (which terminates with a status code).
+The binary must be a RISC-V executable in ELF format. Binaries produced by [Selfie](https://github.com/cksystemsteaching/selfie) should work, as long as they are very simple. Only a couple system calls are supported: "break" (which doesn't actually have an effect), "exit" (which terminates with a status code), "write" (which prints the buffer as a string to the terminal), and "close" (which returns success without having any effect).
 
 The emulator will only print out a couple lines by default, but you can turn on more verbose logging with the `-d` flag:
 
