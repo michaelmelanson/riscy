@@ -1,19 +1,23 @@
 use crate::csr::{CSRRegister, CSR};
-use crate::{memory::Memory, subsystem::{SubsystemError, Subsystem, SubsystemAction}};
+use crate::{memory::{MemoryError, Memory}, subsystem::{Subsystem, SubsystemAction}};
 use riscy_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction, Op32Function};
 use std::{marker::PhantomData, collections::HashMap};
 
 #[derive(Debug)]
-pub enum RiscvMachineError {
-  UnknownSystemCall(u64),
-  Trap
+pub enum TrapCause {
+  MemoryError(MemoryError),
+  InvalidInstruction
 }
 
-impl From<SubsystemError> for RiscvMachineError {
-  fn from(error: SubsystemError) -> Self { 
-    match error {
-      SubsystemError::UnknownSystemCall(syscall) => RiscvMachineError::UnknownSystemCall(syscall)
-    }
+#[derive(Debug)]
+pub enum RiscvMachineError {
+  UnknownSystemCall(u64),
+  Trap(TrapCause)
+}
+
+impl From<MemoryError> for RiscvMachineError {
+  fn from(error: MemoryError) -> Self { 
+    RiscvMachineError::Trap(TrapCause::MemoryError(error))
   }
 }
 
@@ -70,13 +74,15 @@ impl <S: Subsystem> RiscvMachine<S> {
   pub fn step(&mut self) -> RiscvMachineStepResult {
     let pc = self.state().pc;
     log::debug!("Executing at {:#016x}", pc);
-    let mut stream = DecodingStream::new(&self.memory.physical()[pc as usize..]);
+    let mut stream = DecodingStream::new(self.memory.slice(pc)
+      .map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?
+    );
     
     if let Some(instruction) = stream.next() {
       self.execute_instruction(instruction)
     } else {
       self.halt();
-      Err(RiscvMachineError::Trap)
+      Err(RiscvMachineError::Trap(TrapCause::InvalidInstruction))
     }
   }
 
@@ -179,14 +185,14 @@ impl <S: Subsystem> RiscvMachine<S> {
           };     
 
           let value = match width {
-            LoadWidth::DoubleWord => self.load_double_word(address),
-            LoadWidth::Word => self.load_word(address),
-            LoadWidth::WordUnsigned => self.load_word_unsigned(address),
-            LoadWidth::HalfWord => self.load_halfword(address),
-            LoadWidth::HalfWordUnsigned => self.load_halfword_unsigned(address),
-            LoadWidth::Byte => self.load_byte(address),
-            LoadWidth::ByteUnsigned => self.load_byte_unsigned(address),
-          };
+            LoadWidth::DoubleWord => self.memory.load_double_word(address),
+            LoadWidth::Word => self.memory.load_word(address),
+            LoadWidth::WordUnsigned => self.memory.load_word_unsigned(address),
+            LoadWidth::HalfWord => self.memory.load_halfword(address),
+            LoadWidth::HalfWordUnsigned => self.memory.load_halfword_unsigned(address),
+            LoadWidth::Byte => self.memory.load_byte(address),
+            LoadWidth::ByteUnsigned => self.memory.load_byte_unsigned(address),
+          }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
 
           self.state_mut().registers.set(rd, value);
         },
@@ -282,11 +288,11 @@ impl <S: Subsystem> RiscvMachine<S> {
           let value = registers.get(rs2);
 
           match width {
-            StoreWidth::DoubleWord => self.store_double_word(effective_address, value),
-            StoreWidth::Word => self.store_word(effective_address, value),
-            StoreWidth::HalfWord => self.store_halfword(effective_address, value),
-            StoreWidth::Byte => self.store_byte(effective_address, value),
-          }
+            StoreWidth::DoubleWord => self.memory.store_double_word(effective_address, value),
+            StoreWidth::Word => self.memory.store_word(effective_address, value),
+            StoreWidth::HalfWord => self.memory.store_halfword(effective_address, value),
+            StoreWidth::Byte => self.memory.store_byte(effective_address, value),
+          }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?
         },
 
         _ => unimplemented!("S-type opcode {:?}", opcode)
@@ -388,10 +394,10 @@ impl <S: Subsystem> RiscvMachine<S> {
           let address = base.wrapping_add(offset);
 
           let value = match opcode {
-            Opcode::CLW => self.load_word(address),
-            Opcode::CLD => self.load_double_word(address),
+            Opcode::CLW => self.memory.load_word(address),
+            Opcode::CLD => self.memory.load_double_word(address),
             _ => unimplemented!("opcode {:?} in load", opcode)
-          };
+          }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
 
           log::debug!("{:#016x}: {:?} loaded {:#016x} ({}) from {:#016x} + {:#016x} ({}) = {:#016x}", pc, opcode, value, value as i64, base, offset, offset, address);
 
@@ -411,10 +417,10 @@ impl <S: Subsystem> RiscvMachine<S> {
           log::debug!("{:#016x}: C.SW writing {:#016x} ({}) to {:#016x} + {:#016x} ({}) = {:#016x}", pc, value, value as i64, base, offset, offset, address);
 
           match opcode {
-            Opcode::CSW => self.store_word(address, value),
-            Opcode::CSD => self.store_double_word(address, value),
+            Opcode::CSW => self.memory.store_word(address, value),
+            Opcode::CSD => self.memory.store_double_word(address, value),
             _ => unimplemented!("CS storage width opcode {:?}", opcode)
-          };
+          }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
         },
 
         _ => unimplemented!("CS-type opcode {:?}", opcode)
@@ -477,10 +483,10 @@ impl <S: Subsystem> RiscvMachine<S> {
           let address = base.wrapping_add(offset);
 
           let value = match opcode {
-            Opcode::CLWSP => self.load_word(address),
-            Opcode::CLDSP => self.load_double_word(address),
+            Opcode::CLWSP => self.memory.load_word(address),
+            Opcode::CLDSP => self.memory.load_double_word(address),
             _ => unimplemented!("CI-type load width {:?}", opcode)
-          };
+          }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
 
           log::debug!("{:#016x}: {:?} loaded {:#016x} from {:#016x} (SP) + {:#016x} ({}) = {:#016x}", pc, opcode, value, base, offset, offset, address);
           self.state_mut().registers.set(rd, value);
@@ -621,130 +627,16 @@ impl <S: Subsystem> RiscvMachine<S> {
 
         log::debug!("{:#016x}: {:?} writing {:#016x} to {:#016x} (SP) + {:#016x} ({}) = {:#016x}", pc, opcode, value, base, offset, offset, address);
         match opcode {
-          Opcode::CSWSP => self.store_word(address, value),
-          Opcode::CSDSP => self.store_double_word(address, value),
+          Opcode::CSWSP => self.memory.store_word(address, value),
+          Opcode::CSDSP => self.memory.store_double_word(address, value),
           _ => unimplemented!("CSS-type instruction {:?}", opcode)
-        };
+        }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
       },
     };
 
     self.state_mut().pc = next_instruction;
 
     Ok(action)
-  }
-
-  pub fn store_double_word(&mut self, address: u64, value: u64) {
-    log::trace!("{:#016x}: Writing double word {:#016x} ({}) to memory addresses {:#016x}-{:#016x}", self.state().pc, value, value, address, address + 7);
-
-    let physical = self.memory.physical();
-    physical[address as usize + 7] = (value >> 56) as u8;
-    physical[address as usize + 6] = (value >> 48) as u8;
-    physical[address as usize + 5] = (value >> 40) as u8;
-    physical[address as usize + 4] = (value >> 32) as u8;
-    physical[address as usize + 3] = (value >> 24) as u8;
-    physical[address as usize + 2] = (value >> 16) as u8;
-    physical[address as usize + 1] = (value >> 8) as u8;
-    physical[address as usize + 0] = (value >> 0) as u8;
-  }
-
-  pub fn store_word(&mut self, address: u64, value: u64) {
-    log::trace!("{:#016x}: Writing word {:#08x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    let physical = self.memory.physical();
-    physical[address as usize + 3] = (value >> 24) as u8;
-    physical[address as usize + 2] = (value >> 16) as u8;
-    physical[address as usize + 1] = (value >> 8) as u8;
-    physical[address as usize + 0] = (value >> 0) as u8;
-  }
-
-  pub fn store_halfword(&mut self, address: u64, value: u64) {
-    log::trace!("{:#016x}: Writing half-word {:#04x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    let physical = self.memory.physical();
-    physical[address as usize + 1] = (value >> 8) as u8;
-    physical[address as usize + 0] = (value >> 0) as u8;
-  }
-
-  pub fn store_byte(&mut self, address: u64, value: u64) {
-    log::trace!("{:#016x}: Writing byte {:#02x} ({}) to memory address {:#016x}", self.state().pc, value, value, address);
-    self.memory.physical()[address as usize + 0] = (value >> 0) as u8;
-  }
-
-  pub fn load_double_word(&mut self, address: u64) -> u64 {
-    let physical = self.memory.physical();
-    let value = (physical[address as usize + 7] as u64) << 56
-                   | (physical[address as usize + 6] as u64) << 48
-                   | (physical[address as usize + 5] as u64) << 40
-                   | (physical[address as usize + 4] as u64) << 32
-                   | (physical[address as usize + 3] as u64) << 24
-                   | (physical[address as usize + 2] as u64) << 16
-                   | (physical[address as usize + 1] as u64) << 8
-                   | (physical[address as usize + 0] as u64) << 0;
-
-    log::trace!("{:#016x}: Loaded {:#016x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
-
-    value
-  }
-
-  pub fn load_word(&mut self, address: u64) -> u64 {
-    let physical = self.memory.physical();
-    let value = (physical[address as usize + 3] as u32) << 24
-                   | (physical[address as usize + 2] as u32) << 16
-                   | (physical[address as usize + 1] as u32) << 8
-                   | (physical[address as usize + 0] as u32) << 0;
-
-    log::trace!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
-
-    value as i32 as u64
-  }
-
-  fn load_word_unsigned(&mut self, address: u64) -> u64 {
-    let physical = self.memory.physical();
-
-    let value = (physical[address as usize + 3] as u32) << 24
-                   | (physical[address as usize + 2] as u32) << 16
-                   | (physical[address as usize + 1] as u32) << 8
-                   | (physical[address as usize + 0] as u32) << 0;
-
-    log::trace!("{:#016x}: Loaded word {:#08x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
-
-    value as u64
-  }
-
-  pub fn load_halfword(&mut self, address: u64) -> u64 {
-    let physical = self.memory.physical();
-    let value = (physical[address as usize + 1] as u16) << 8
-                   | (physical[address as usize + 0] as u16) << 0;
-
-    log::trace!("{:#016x}: Loaded half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
-
-    value as i16 as u64
-  }
-
-  pub fn load_halfword_unsigned(&mut self, address: u64) -> u64 {
-    let physical = self.memory.physical();
-    let value = (physical[address as usize + 1] as u16) << 8
-                   | (physical[address as usize + 0] as u16) << 0;
-
-    log::trace!("{:#016x}: Loaded unsigned half-word {:#04x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
-
-    value as u64
-  }
-
-  pub fn load_byte(&mut self, address: u64) -> u64 {
-    let physical = self.memory.physical();
-    let value = (physical[address as usize + 0] as u8) << 0;
-
-    log::trace!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
-
-    value as i8 as u64
-  }
-
-  pub fn load_byte_unsigned(&mut self, address: u64) -> u64 {
-    let physical = self.memory.physical();
-    let value = (physical[address as usize + 0] as u8) << 0;
-
-    log::debug!("{:#016x}: Loaded unsigned byte {:#02x} ({}) from memory address {:#016x}", self.state().pc, value, value, address);
-
-    value as u64
   }
 }
 
@@ -788,10 +680,12 @@ impl RiscvRegisters {
 
 #[cfg(test)]
 mod tests {
-  use crate::{subsystem::Posix, machine::RiscvMachine, memory::Memory};
+  use crate::{subsystem::Posix, machine::RiscvMachine, memory::{Region, Memory}};
 
   fn machine() -> RiscvMachine<Posix> {
-    let memory = Memory::new(0x100000);
+    let mut memory = Memory::new();
+    memory.add_region(Region::readwrite_memory(0x000000, 0x100000));
+
     RiscvMachine::<Posix>::new(memory, 0x10000)
   }
 
@@ -799,24 +693,24 @@ mod tests {
   fn test_store_double_word() {
     let mut machine = machine();
     
-    machine.store_double_word(0x1000, 0x1234567890abcdefu64);
+    machine.memory.store_double_word(0x1000, 0x1234567890abcdefu64).unwrap();
 
-    assert_eq!(machine.memory.physical()[0x1000..=0x1007], [0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12]);
+    assert_eq!(machine.memory.slice(0x1000).expect("slice")[0..0x7], [0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12]);
   }
 
   #[test]
   fn test_load_double_word() {
     let mut machine = machine();
-    machine.memory.physical()[0x1007] = 0x12;
-    machine.memory.physical()[0x1006] = 0x34;
-    machine.memory.physical()[0x1005] = 0x56;
-    machine.memory.physical()[0x1004] = 0x78;
-    machine.memory.physical()[0x1003] = 0x90;
-    machine.memory.physical()[0x1002] = 0xab;
-    machine.memory.physical()[0x1001] = 0xcd;
-    machine.memory.physical()[0x1000] = 0xef;
+    machine.memory.store_byte(0x1007, 0x12).expect("load failed");
+    machine.memory.store_byte(0x1006, 0x34).expect("load failed");
+    machine.memory.store_byte(0x1005, 0x56).expect("load failed");
+    machine.memory.store_byte(0x1004, 0x78).expect("load failed");
+    machine.memory.store_byte(0x1003, 0x90).expect("load failed");
+    machine.memory.store_byte(0x1002, 0xab).expect("load failed");
+    machine.memory.store_byte(0x1001, 0xcd).expect("load failed");
+    machine.memory.store_byte(0x1000, 0xef).expect("load failed");
 
-    let actual = machine.load_double_word(0x1000);
+    let actual = machine.memory.load_double_word(0x1000).expect("load failed");
 
     assert_eq!(actual, 0x1234567890abcdefu64);
   }

@@ -1,16 +1,12 @@
-use crate::machine::{RiscvMachine};
+use crate::machine::{RiscvMachine, RiscvMachineError};
 
 mod posix;
 pub use posix::Posix;
-
-pub enum SubsystemError {
-  UnknownSystemCall(u64)
-}
 
 pub enum SubsystemAction {
   Exit { status_code: u64 }
 }
 
 pub trait Subsystem: Default {
-  fn system_call(&mut self, context: &mut RiscvMachine<Self>) -> Result<Option<SubsystemAction>, SubsystemError>;
+  fn system_call(&mut self, context: &mut RiscvMachine<Self>) -> Result<Option<SubsystemAction>, RiscvMachineError>;
 }

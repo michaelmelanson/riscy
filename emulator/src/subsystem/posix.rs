@@ -1,7 +1,7 @@
 
-use super::{SubsystemAction, Subsystem, SubsystemError};
+use super::{SubsystemAction, Subsystem};
 use riscy_isa::Register;
-use crate::machine::RiscvMachine;
+use crate::machine::{RiscvMachineError, RiscvMachine};
 
 struct File {
   fd: u64,
@@ -12,7 +12,7 @@ struct File {
 pub struct Posix;
 
 impl Subsystem for Posix {
-  fn system_call(&mut self, machine: &mut RiscvMachine<Self>) -> Result<Option<SubsystemAction>, SubsystemError> { 
+  fn system_call(&mut self, machine: &mut RiscvMachine<Self>) -> Result<Option<SubsystemAction>, RiscvMachineError> { 
     let registers = &machine.state().registers;
     
     let syscall = registers.get(Register::A7);
@@ -37,9 +37,7 @@ impl Subsystem for Posix {
         let mut string = String::new();
 
         for address in base..base+size {
-          let byte = machine.load_byte(address) as u8;
-          if byte == 0 { break; }
-
+          let byte = machine.memory.load_byte(address)? as u8;
           string.push(byte as char);
         }
 
@@ -62,8 +60,8 @@ impl Subsystem for Posix {
           fd => unimplemented!("fstat({})", fd)
         };
 
-        machine.store_double_word(st + 0, file.fd);
-        machine.store_word(st + 4, file.ref_count as u64);
+        machine.memory.store_double_word(st + 0, file.fd)?;
+        machine.memory.store_word(st + 4, file.ref_count as u64)?;
 
         machine.state_mut().registers.set(Register::A0, 0);
         Ok(None)
@@ -92,7 +90,7 @@ impl Subsystem for Posix {
         Ok(None)
       },
 
-      _ => Err(SubsystemError::UnknownSystemCall(syscall))
+      _ => Err(RiscvMachineError::UnknownSystemCall(syscall))
     }
    }
 }

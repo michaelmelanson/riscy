@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use riscy_emulator::machine::{RiscvMachine, RiscvMachineError, RiscvMachineStepAction};
-use riscy_emulator::{subsystem::{Subsystem, Posix}, memory::Memory};
+use riscy_emulator::{subsystem::{Subsystem, Posix}, memory::{Region, Memory}};
 use riscy_isa::{Register};
 
 fn main()  -> Result<(), RiscvMachineError> {
@@ -50,7 +50,8 @@ fn main()  -> Result<(), RiscvMachineError> {
 
   let memory_size = memory_size_mb*1024*1024;
 
-  let mut memory = Memory::new(memory_size);
+  let mut memory = Memory::new();
+  memory.add_region(Region::readwrite_memory(0, memory_size as u64));
 
   let file = std::fs::read(file_path).expect("Could not read file");
   let binary = goblin::elf::Elf::parse(&file).expect("Could not parse file");
@@ -62,7 +63,7 @@ fn main()  -> Result<(), RiscvMachineError> {
 
     for (offset, byte) in header_bytes.iter().enumerate() {
       let address = (ph.p_vaddr as usize) + (offset as usize);
-      memory.physical()[address] = *byte;
+      memory.store_byte(address as u64, *byte as u64)?;
     }
   }
 

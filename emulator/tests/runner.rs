@@ -1,11 +1,15 @@
-use riscy_emulator::{subsystem::{Subsystem, SubsystemAction, SubsystemError}, machine::{RiscvMachine}, memory::Memory};
+use riscy_emulator::{
+  subsystem::{Subsystem, SubsystemAction}, 
+  machine::{RiscvMachine, RiscvMachineError}, 
+  memory::{Region, Memory}
+};
 use riscy_isa::{Register};
 
 #[derive(Default)]
 struct TestRunnerSubsystem;
 
 impl Subsystem for TestRunnerSubsystem {
-  fn system_call(&mut self, machine: &mut RiscvMachine<Self>) -> Result<Option<SubsystemAction>, SubsystemError> { 
+  fn system_call(&mut self, machine: &mut RiscvMachine<Self>) -> Result<Option<SubsystemAction>, RiscvMachineError> { 
     let state = machine.state();
     let syscall = state.registers.get(Register::A7);
 
@@ -34,7 +38,8 @@ pub fn run_test_suite(file: &[u8]) {
 
   let binary = goblin::elf::Elf::parse(file).expect("Could not parse file");
   
-  let mut memory = Memory::new(1024*1024*1024*4);
+  let mut memory = Memory::new();
+  memory.add_region(Region::readwrite_memory(0, 1024*1024*1024*4));
 
   for ph in binary.program_headers {
     // println!("Loading header: {:?}", ph);
@@ -42,7 +47,7 @@ pub fn run_test_suite(file: &[u8]) {
 
     for (offset, byte) in header_bytes.iter().enumerate() {
       let address = (ph.p_vaddr as usize) + (offset as usize);
-      memory.physical()[address] = *byte;
+      memory.store_byte(address as u64, *byte as u64).expect("write to memory");
     }
   }
 

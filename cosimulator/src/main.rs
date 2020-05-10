@@ -1,8 +1,9 @@
 use clap::{Arg, App};
 use riscy_emulator::{
-  memory::Memory, 
+  memory::{Memory, Region},
   subsystem::{Posix}, 
   machine::{RiscvMachine, RiscvMachineError, RiscvMachineStepAction},
+  roms::ResetVecRom,
 };
 use riscy_isa::{Register};
 use std::{
@@ -47,7 +48,7 @@ pub fn main() -> Result<(), RiscvMachineError> {
   log::info!("Starting up!");
 
   let memory_size_mb = matches.value_of("MEMORY").expect("No value for MEMORY")
-    .parse::<usize>().expect("MEMORY must be a positive number");
+    .parse::<u64>().expect("MEMORY must be a positive number");
   let file_path = matches.value_of("FILE").expect("You must give a file to run");
 
   let memory_size = memory_size_mb*1024*1024;
@@ -88,69 +89,38 @@ struct RiscySimulator {
 }
 
 impl RiscySimulator {
-  fn new(memory_size: usize, path: &str) -> Self {
-    let mut memory = Memory::new(memory_size);
-    
+  fn new(memory_size: u64, path: &str) -> Self {
+    let mut memory = Memory::new();
+
     let file = std::fs::read(path).expect("Could not read file");
     let binary = goblin::elf::Elf::parse(&file).expect("Could not parse file");
     
-    let entry_virt_address = binary.header.e_entry;
+    let entry_address = binary.header.e_entry;
+    log::debug!("Entry point is {:#016x}", entry_address);
 
     for ph in binary.program_headers {
       let header_bytes = &file[ph.file_range()];
       
       log::debug!("Loading header {:?} from {:?} into {:#016x}", ph, ph.file_range(), ph.p_vaddr);
-      
+      let mut region = Region::readwrite_memory(ph.p_vaddr, ph.p_memsz);
+
       for (offset, byte) in header_bytes.iter().enumerate() {
-        memory.physical()[(ph.p_paddr as usize) + (offset as usize)] = *byte;
+        region.write(offset as u64, *byte).expect("write to memory region while loading binary");
       }
+
+      let region = if ph.is_executable() {
+        region.make_executable()
+      } else {
+        region
+      };
+
+      memory.add_region(region);
     }
 
-    log::debug!("Entry point is {:#016x}", entry_virt_address);
+    memory.add_region(ResetVecRom::new(entry_address).into());
     
-    const XLEN: u32 = 64;
-    const RESET_VEC_BASE: usize = 0x1000;
-    const RESET_VEC_SIZE: u32 = 8;
 
-    let mut reset_vec = [
-      0x297,                                      // auipc  t0,0x0
-      0x28593 + (RESET_VEC_SIZE * 4 << 20),       // addi   a1, t0, &dtb
-      0xf1402573,                                 // csrr   a0, mhartid
-      if XLEN == 32 { 0x0182a283 }                // lw     t0,24(t0)
-      else          { 0x0182b283 },               // ld     t0,24(t0)
-      0x28067,                                    // jr     t0
-      0,
-      (entry_virt_address & 0xffffffff) as u32,
-      (entry_virt_address >> 32) as u32
-    ].to_vec();
-
-    let dtb: &[u8] = include_bytes!("../spike.dtb");
-    for offset in (0..dtb.len()-7).step_by(8) {
-      let low = 
-        (dtb[offset + 0] as u32) << 0 |
-        (dtb[offset + 1] as u32) << 8 |
-        (dtb[offset + 2] as u32) << 16 |
-        (dtb[offset + 3] as u32) << 24;
-
-      let high = 
-        (dtb[offset + 4] as u32) << 0 |
-        (dtb[offset + 5] as u32) << 8 |
-        (dtb[offset + 6] as u32) << 16 |
-        (dtb[offset + 7] as u32) << 24;
-
-        reset_vec.push(low);
-        reset_vec.push(high);
-    }
-
-
-    for (offset, x) in reset_vec.iter().enumerate() {
-      memory.physical()[RESET_VEC_BASE + (4*offset) + 0] = (x >> 0) as u8;
-      memory.physical()[RESET_VEC_BASE + (4*offset) + 1] = (x >> 8) as u8;
-      memory.physical()[RESET_VEC_BASE + (4*offset) + 2] = (x >> 16) as u8;
-      memory.physical()[RESET_VEC_BASE + (4*offset) + 3] = (x >> 24) as u8;
-    }
-
-    let machine= RiscvMachine::<Posix>::new(memory, RESET_VEC_BASE as u64);
+    let machine= RiscvMachine::<Posix>::new(memory, 0x1000);
 
     RiscySimulator { machine }
   }
@@ -174,7 +144,7 @@ impl Simulator for RiscySimulator {
 
       let mut memory = Vec::new();
       for address in memory_addresses {
-        let value = self.machine.load_double_word(*address);
+        let value = self.machine.memory.load_double_word(*address).expect("load from memory");
         memory.push((*address, value));
       }
         
@@ -195,8 +165,7 @@ impl Simulator for RiscySimulator {
 
 #[derive(Debug)]
 enum SpikeSimulatorCommand {
-  Send(String),
-  Terminate
+  Send(String) 
 }
 
 #[derive(Debug)]
@@ -229,7 +198,6 @@ impl SpikeSimulator {
 
         match command {
           SpikeSimulatorCommand::Send(s) => writeln!(stdin, "{}", s).expect("write to stdin"),
-          SpikeSimulatorCommand::Terminate => return ()
         };
 
         let mut response = String::new();
