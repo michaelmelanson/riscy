@@ -5,7 +5,7 @@ mod region;
 
 #[derive(Debug)]
 pub enum MemoryError {
-  OutOfRegion,
+  OutOfRegion(u64),
   NotWritable,
   NotExecutable
 }
@@ -33,7 +33,7 @@ impl Memory {
       }
     }
 
-    Err(MemoryError::OutOfRegion)
+    Err(MemoryError::OutOfRegion(address))
   }
 
   fn find_region(&self, address: u64) -> MemoryResult<&Region> {
@@ -43,7 +43,7 @@ impl Memory {
       }
     }
 
-    Err(MemoryError::OutOfRegion) 
+    Err(MemoryError::OutOfRegion(address)) 
   }
 
   pub fn slice(&self, base: u64) -> MemoryResult<&[u8]> {
