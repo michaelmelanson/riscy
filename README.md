@@ -27,7 +27,7 @@ cargo run -p emulator -- -d debug path/to/binary
 
 ### RISC-V compliance
 
-_tl;dr_ it supports the basics, but it's hopelessly inadequate at anything complex.
+_tl;dr_ it might run your program, if you're super generous with your definition of "run".
 
 This repository contains binary versions of the `riscv-tests` test suite from
 https://github.com/riscv/riscv-tests and uses these to test compliance with the 
