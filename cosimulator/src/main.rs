@@ -118,9 +118,13 @@ impl RiscySimulator {
     }
 
     memory.add_region(ResetVecRom::new(entry_address).into());
-    
 
-    let machine= RiscvMachine::<Posix>::new(memory, 0x1000);
+    // TODO - check this
+    // the 0x2000 here is super arbitrary and probably incorrect. 
+    // what does spike do here?
+    memory.add_region(Region::readwrite_memory(0x2000, memory_size));
+
+    let machine = RiscvMachine::<Posix>::new(memory, 0x1000);
 
     RiscySimulator { machine }
   }
