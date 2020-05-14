@@ -645,9 +645,10 @@ impl <S: Subsystem> RiscvMachine<S> {
           let rhs = self.state().registers.get(rs2);
 
           let result = match func {
-            AmoFunction::ADD => value.wrapping_add(rhs),
-            AmoFunction::AND => value & rhs,
-            AmoFunction::MAX => value.max(rhs),
+            AmoFunction::ADD => (value as i64).wrapping_add(rhs as i64) as u64,
+            AmoFunction::AND => ((value as i64) & (rhs as i64)) as u64,
+            AmoFunction::MAX => (value as i64).max(rhs as i64) as u64,
+            AmoFunction::MIN => (value as i64).min(rhs as i64) as u64,
             _ => unimplemented!("AMO function {:?}", func)
           };
 
