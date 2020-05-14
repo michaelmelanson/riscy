@@ -648,6 +648,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             AmoFunction::ADD => (value as i64).wrapping_add(rhs as i64) as u64,
             AmoFunction::AND => value & rhs,
             AmoFunction::OR => value | rhs,
+            AmoFunction::XOR => value ^ rhs,
             AmoFunction::MAX => (value as i64).max(rhs as i64) as u64,
             AmoFunction::MAXU => value.max(rhs),
             AmoFunction::MIN => (value as i64).min(rhs as i64) as u64,

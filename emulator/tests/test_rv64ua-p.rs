@@ -44,6 +44,6 @@ deftest!(amoor_d);
 deftest!(amoor_w);
 deftest_ignore!(amoswap_d);
 deftest_ignore!(amoswap_w);
-deftest_ignore!(amoxor_d);
-deftest_ignore!(amoxor_w);
+deftest!(amoxor_d);
+deftest!(amoxor_w);
 deftest_ignore!(lrsc);
