@@ -646,6 +646,7 @@ impl <S: Subsystem> RiscvMachine<S> {
 
           let result = match func {
             AmoFunction::ADD => value.wrapping_add(rhs),
+            AmoFunction::AND => value & rhs,
             _ => unimplemented!("AMO function {:?}", func)
           };
 
