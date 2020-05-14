@@ -633,7 +633,7 @@ impl <S: Subsystem> RiscvMachine<S> {
         }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
       },
 
-      Instruction::AR { opcode, aq, rl, rs1, rs2, rd } => match opcode {
+      Instruction::AR { opcode, aq: _, rl: _, rs1, rs2, rd } => match opcode {
         Opcode::Amo(func, width) => {
 
           let lhs = self.state().registers.get(rs1);

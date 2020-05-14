@@ -548,7 +548,6 @@ impl AmoFunction {
       0b01000 => AmoFunction::OR,
       0b10000 => AmoFunction::MIN,
       0b10100 => AmoFunction::MAX,
-      0b10000 => AmoFunction::MIN,
       0b11100 => AmoFunction::MAXU,
       0b11000 => AmoFunction::MINU,
       _ => unimplemented!("AMO function {:#05b}", func5)
@@ -1321,7 +1320,7 @@ impl Instruction {
         }
       },
 
-      Opcode::Amo(func, width) => {
+      Opcode::Amo(_func, _width) => {
         let aq  = (encoded >> 26) & 0b1;
         let rl  = (encoded >> 25) & 0b1;
         let rs2 = (encoded >> 20) & 0b11111;
