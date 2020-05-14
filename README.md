@@ -37,7 +37,8 @@ RISC-V standard:
 |-|-|-|
 | RV64I Base instruction set            | **100%** 🎉 | |
 | "M" Integer multiplication & division | 12 / 13 test suites (**92%**)  | Exception is MULHSU which is a pain in the ass |
-| "Zicsr" Control & Status Register     | 2 / 11  (**18%**)| Some CSRs work |
+| "A" Atomic operations                 | 18 / 19 test suites (**94%**) | Load-Reserved and Store-Condition are not implemented |
+| "Zicsr" Control & Status Register     | 2 / 11 test suites (**18%**)| Some CSRs work |
 | "C" Compressed instructions           | **100%** 🎉 | Not including re-encoding |
 
 ### Selfie compatibility
