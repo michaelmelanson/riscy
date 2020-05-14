@@ -653,6 +653,7 @@ impl <S: Subsystem> RiscvMachine<S> {
             AmoFunction::MAXU => value.max(rhs),
             AmoFunction::MIN => (value as i64).min(rhs as i64) as u64,
             AmoFunction::MINU => value.min(rhs),
+            AmoFunction::SWAP => rhs,
 
             _ => unimplemented!("AMO function {:?}", func)
           };
