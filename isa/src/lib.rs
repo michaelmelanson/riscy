@@ -17,7 +17,7 @@ pub enum Opcode {
   Store(StoreWidth),
   StoreFp,
   Custom1,
-  Amo,
+  Amo(AmoFunction, AmoWidth),
   Op(OpFunction),
   Lui,
   Op32(Op32Function),
@@ -143,7 +143,7 @@ impl Opcode {
     }
   }
 
-  fn new(base: u16, func3: u8, imm11_0: u16, func7: u8) -> Opcode {
+  fn new(base: u16, func3: u8, imm11_0: u16, func5: u8, func7: u8) -> Opcode {
     let opcode = base & 0b1111111;
     match opcode {
       0b0000011 => Opcode::Load(LoadWidth::from_func3(func3)),
@@ -157,7 +157,10 @@ impl Opcode {
       0b0100011 => Opcode::Store(StoreWidth::from_func3(func3)),
       0b0100111 => Opcode::StoreFp,
       0b0101011 => unimplemented!("Custom 1"),
-      0b0101111 => Opcode::Amo,
+      0b0101111 => Opcode::Amo(
+        AmoFunction::from_func5(func5),
+        AmoWidth::from_func3(func3)
+      ),
       0b0110011 => Opcode::Op(OpFunction::from_func3_func7(func3, func7)),
       0b0110111 => Opcode::Lui,
       0b0111011 => Opcode::Op32(Op32Function::from_func3_func7(func3, func7)),
@@ -195,7 +198,7 @@ impl Opcode {
       Opcode::Store(_) => 0b0100011, 
       Opcode::StoreFp => 0b0100111, 
       Opcode::Custom1 => 0b0101011, 
-      Opcode::Amo => 0b0101111, 
+      Opcode::Amo(_, _) => 0b0101111, 
       Opcode::Op(_) => 0b0110011, 
       Opcode::Lui => 0b0110111, 
       Opcode::Op32(_) => 0b0111011, 
@@ -501,7 +504,72 @@ impl OpImm32Function {
     }
   }
 }
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum AmoWidth {
+  Word,
+  DoubleWord
+}
 
+impl AmoWidth {
+  pub fn from_func3(func3: u8) -> Self {
+    match func3 {
+      0b010 => AmoWidth::Word,
+      0b011 => AmoWidth::DoubleWord,
+      _ => unimplemented!("AMO width {:#03b}", func3)
+    }
+  }
+} 
+
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum AmoFunction {
+  LR,
+  SC,
+  SWAP,
+  ADD,
+  AND,
+  OR,
+  XOR,
+  MAX,
+  MIN,
+  MAXU,
+  MINU
+}
+
+impl AmoFunction {
+  pub fn from_func5(func5: u8) -> Self {
+    match func5 {
+      0b00010 => AmoFunction::LR,
+      0b00011 => AmoFunction::SC,
+      0b00001 => AmoFunction::SWAP,
+      0b00000 => AmoFunction::ADD,
+      0b00100 => AmoFunction::XOR,
+      0b01100 => AmoFunction::AND,
+      0b01000 => AmoFunction::OR,
+      0b10000 => AmoFunction::MIN,
+      0b10100 => AmoFunction::MAX,
+      0b10000 => AmoFunction::MIN,
+      0b11100 => AmoFunction::MAXU,
+      0b11000 => AmoFunction::MINU,
+      _ => unimplemented!("AMO function {:#05b}", func5)
+    }
+  }
+} 
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum AmoOrdering {
+  Ordered, Unordered
+}
+
+impl AmoOrdering {
+  fn from_bit(bit: u8) -> Self {
+    match bit {
+      0 => AmoOrdering::Unordered,
+      1 => AmoOrdering::Ordered,
+      _ => unimplemented!("AMO ordering {}", bit)
+    }
+  }
+}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OpFunction {
@@ -867,6 +935,9 @@ pub enum Instruction {
   CJ { opcode: Opcode, imm: i16 },
   CR { opcode: Opcode, rd: Register, rs2: Register },
   CSS { opcode: Opcode, imm: u16, rs2: Register },
+
+  // "A" (Atomic) extension
+  AR { opcode: Opcode, aq: AmoOrdering, rl: AmoOrdering, rs2: Register, rs1: Register, rd: Register },
 }
 
 impl Instruction {
@@ -1121,6 +1192,7 @@ impl Instruction {
 
   pub fn from_32bits(encoded: u32) -> Instruction {
     let funct3   = (encoded >> 12) & 0b111;
+    let funct5   = (encoded >> 27) & 0b11111;
     let funct7   = (encoded >> 25) & 0b1111111;
     let imm11_0   = (encoded >> 20) & 0b111111111111;
 
@@ -1128,6 +1200,7 @@ impl Instruction {
       encoded as u16, 
       funct3 as u8,
       imm11_0 as u16,
+      funct5 as u8,
       funct7 as u8
     );
 
@@ -1245,6 +1318,29 @@ impl Instruction {
           rd: Register::from_u8(rd as u8), 
           imm: imm as u32, 
           rs1: Register::from_u8(rs1 as u8) 
+        }
+      },
+
+      Opcode::Amo(func, width) => {
+        let aq  = (encoded >> 26) & 0b1;
+        let rl  = (encoded >> 25) & 0b1;
+        let rs2 = (encoded >> 20) & 0b11111;
+        let rs1 = (encoded >> 15) & 0b11111;
+        let rd  = (encoded >> 7)  & 0b11111;
+
+        let aq = AmoOrdering::from_bit(aq as u8);
+        let rl = AmoOrdering::from_bit(rl as u8);
+        let rs2 = Register::from_u8(rs2 as u8);
+        let rs1 = Register::from_u8(rs1 as u8);
+        let rd = Register::from_u8(rd as u8);
+
+        Instruction::AR {
+          opcode,
+          aq,
+          rl,
+          rs2,
+          rs1,
+          rd
         }
       },
 
@@ -1390,6 +1486,8 @@ impl Instruction {
       Instruction::CJ { opcode: _, imm: _ } => todo!("encoding for CB-type"),
       Instruction::CR { opcode: _, rd: _, rs2: _ } => todo!("encoding for CR-type"),
       Instruction::CSS { opcode: _, rs2: _, imm: _ } => todo!("encoding for CSS-type"),
+
+      Instruction::AR { opcode: _, aq: _, rl: _, rd: _, rs1: _, rs2: _ } => todo!("encoding for CSS-type"),
     }
   }
 
@@ -1412,7 +1510,8 @@ impl Instruction {
       Instruction::S { opcode: _, rs1: _, rs2: _, imm: _ } | 
       Instruction::B { opcode: _, rs1: _, rs2: _, imm: _ } | 
       Instruction::U { opcode: _, rd: _, imm: _ } | 
-      Instruction::J { opcode: _, rd: _, imm: _ } => 4,
+      Instruction::J { opcode: _, rd: _, imm: _ } |
+      Instruction::AR { opcode: _, aq: _, rl: _, rd: _, rs1: _, rs2: _ } => 4,
     }
   }
 }

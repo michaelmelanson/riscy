@@ -1,6 +1,6 @@
 use crate::csr::{CSRRegister, CSR};
 use crate::{memory::{MemoryError, Memory}, subsystem::{Subsystem, SubsystemAction}};
-use riscy_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction, Op32Function};
+use riscy_isa::{DecodingStream, Instruction,  Register, Opcode, OpImmFunction, SystemFunction, OpFunction, StoreWidth, LoadWidth, BranchOperation, EnvironmentFunction, OpImm32Function, MiscMemFunction, Op32Function, AmoFunction, AmoWidth};
 use std::{marker::PhantomData, collections::HashMap};
 
 #[derive(Debug)]
@@ -631,6 +631,33 @@ impl <S: Subsystem> RiscvMachine<S> {
           Opcode::CSDSP => self.memory.store_double_word(address, value),
           _ => unimplemented!("CSS-type instruction {:?}", opcode)
         }.map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
+      },
+
+      Instruction::AR { opcode, aq, rl, rs1, rs2, rd } => match opcode {
+        Opcode::Amo(func, width) => {
+
+          let lhs = self.state().registers.get(rs1);
+          let value = match width {
+            AmoWidth::DoubleWord => self.memory.load_double_word(lhs)?,
+            AmoWidth::Word => self.memory.load_word(lhs)?,
+          };
+
+          let rhs = self.state().registers.get(rs2);
+
+          let result = match func {
+            AmoFunction::ADD => value.wrapping_add(rhs),
+            _ => unimplemented!("AMO function {:?}", func)
+          };
+
+          self.state_mut().registers.set(rd, value);
+
+          match width {
+            AmoWidth::DoubleWord => self.memory.store_double_word(lhs, result)?,
+            AmoWidth::Word => self.memory.store_word(lhs, result)?,
+          }
+        },
+
+        _ => unimplemented!("AR-type instruction {:?}", opcode)
       },
     };
 
