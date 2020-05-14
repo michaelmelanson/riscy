@@ -29,7 +29,7 @@ macro_rules! deftest_ignore {
 }
 
 deftest!(amoadd_d);
-deftest_ignore!(amoadd_w);
+deftest!(amoadd_w);
 deftest_ignore!(amoand_d);
 deftest_ignore!(amoand_w);
 deftest_ignore!(amomax_d);
