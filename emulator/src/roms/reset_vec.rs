@@ -1,5 +1,5 @@
 
-use crate::memory::Region;
+use crate::memory::{Region, Permissions};
 
 pub struct ResetVecRom { entry_address: u64 }
 impl ResetVecRom {
@@ -56,7 +56,7 @@ impl Into<Region> for ResetVecRom {
 
     let mmap = mmap.make_read_only().expect("convert mmap to read-only");
 
-    Region::rom(RESET_VEC_BASE, mmap)
+    Region::rom(RESET_VEC_BASE, mmap, Permissions::executable())
   }
 }
 

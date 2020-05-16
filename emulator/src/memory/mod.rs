@@ -1,5 +1,5 @@
 
-pub use region::Region;
+pub use region::{Region, Permissions};
 
 mod region;
 

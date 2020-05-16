@@ -90,6 +90,8 @@ impl <S: Subsystem> RiscvMachine<S> {
     let pc = self.state().pc;
     log::trace!("{:#016x}: Executing {:?}", pc, instruction);
 
+    self.memory.ensure_executable(pc)?;
+
     let mut action = RiscvMachineStepAction::ExecutedInstruction { instruction };
     let mut next_instruction = pc + instruction.width_bytes();
 

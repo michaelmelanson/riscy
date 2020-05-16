@@ -10,11 +10,11 @@ pub struct Region {
 }
 
 impl Region {
-  pub fn rom(base: u64, backing: Mmap) -> Region {
+  pub fn rom(base: u64, backing: Mmap, permissions: Permissions) -> Region {
     Region {
       backing: RegionBacking::Rom(RomBacking::new(backing)),
       base,
-      permissions: Permissions::readonly()
+      permissions
     }
   }
 
