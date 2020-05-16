@@ -583,9 +583,9 @@ impl <S: Subsystem> RiscvMachine<S> {
         }
       },
 
-      Instruction::CR { opcode, rd, rs2} => match opcode {
+      Instruction::CR { opcode, rs1, rs2} => match opcode {
         Opcode::CJR => {
-          let address = self.state().registers.get(rd);
+          let address = self.state().registers.get(rs1);
           log::debug!("{:#016x}: C.JR jumping to {:#016x}", pc, address);
           next_instruction = address;
         },
@@ -593,12 +593,12 @@ impl <S: Subsystem> RiscvMachine<S> {
         Opcode::CMV => {
           let value = self.state().registers.get(rs2);
 
-          log::debug!("{:#016x}: C.MV copying {:#016x} from {:?} into {:?}", pc, value, rs2, rd);
-          self.state_mut().registers.set(rd, value);
+          log::debug!("{:#016x}: C.MV copying {:#016x} from {:?} into {:?}", pc, value, rs2, rs1);
+          self.state_mut().registers.set(rs1, value);
         },
 
         Opcode::CJALR => {
-          let address = self.state().registers.get(rd);
+          let address = self.state().registers.get(rs1);
           let link = next_instruction;
 
           log::debug!("{:#016x}: C.JALR jumping to {:#016x} with link {:#016x}", pc, address, link);
@@ -607,12 +607,12 @@ impl <S: Subsystem> RiscvMachine<S> {
         },
 
         Opcode::CADD => {
-          let lhs = self.state().registers.get(rd) as i64;
+          let lhs = self.state().registers.get(rs1) as i64;
           let rhs = self.state().registers.get(rs2) as i64;
           let value = lhs.wrapping_add(rhs);
 
           log::debug!("{:#016x}: C.CADD computed {:#016x} ({}) = {:#016x} ({}) + {:#016x} ({})", pc, value, value, lhs, lhs, rhs, rhs);
-          self.state_mut().registers.set(rd, value as u64)
+          self.state_mut().registers.set(rs1, value as u64)
 
         },
 
@@ -635,7 +635,6 @@ impl <S: Subsystem> RiscvMachine<S> {
 
       Instruction::AR { opcode, aq: _, rl: _, rs1, rs2, rd } => match opcode {
         Opcode::Amo(func, width) => {
-
           let lhs = self.state().registers.get(rs1);
           let value = match width {
             AmoWidth::DoubleWord => self.memory.load_double_word(lhs)?,
