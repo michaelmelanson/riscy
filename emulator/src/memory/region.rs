@@ -27,10 +27,14 @@ impl Region {
   }
 
   pub fn make_executable(self) -> Region {
+    self.change_permissions(Permissions::executable())
+  }
+
+  pub fn change_permissions(self, permissions: Permissions) -> Region {
     Region {
       backing: self.backing,
       base: self.base,
-      permissions: Permissions::executable()
+      permissions
     } 
   }
 
@@ -92,6 +96,10 @@ pub struct Permissions {
 }
 
 impl Permissions {
+  pub fn custom(writable: bool, executable: bool) -> Permissions {
+    Permissions { writable, executable }
+  }
+
   pub fn readonly() -> Permissions { 
     Permissions { writable: false, executable: false }
   }

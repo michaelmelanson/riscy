@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use riscy_emulator::machine::{RiscvMachine, RiscvMachineError, RiscvMachineStepAction};
-use riscy_emulator::{subsystem::{Subsystem, Posix}, memory::{Region, Memory}};
+use riscy_emulator::{subsystem::{Subsystem, Posix}, memory::{Region, Memory, Permissions}};
 use riscy_isa::{Register};
 
 fn main()  -> Result<(), RiscvMachineError> {
@@ -36,6 +36,10 @@ fn main()  -> Result<(), RiscvMachineError> {
       .possible_values(&["trace", "debug", "info", "warn", "error"])
       .default_value("info"))
 
+    .arg(Arg::with_name("ALLOW_WX")
+      .long("allow-wx")
+      .help("Allow memory regions can be both written to and executed."))
+
     .get_matches();
 
   std::env::set_var("RUST_LOG", matches.value_of("LOG_LEVEL").expect("LOG_LEVEL"));
@@ -47,6 +51,7 @@ fn main()  -> Result<(), RiscvMachineError> {
     .parse::<usize>().expect("MEMORY must be a positive number");
   let file_path = matches.value_of("FILE").expect("You must give a file to run");
   let subsystem = matches.value_of("SUBSYSTEM").expect("You must give a SUBSYSTEM");
+  let allow_rx = matches.is_present("ALLOW_WX");
 
   let memory_size = memory_size_mb*1024*1024;
 
@@ -60,13 +65,28 @@ fn main()  -> Result<(), RiscvMachineError> {
     let header_bytes = &file[ph.file_range()];
 
     log::debug!("Loading header {:?} from {:?} into {:#016x}", ph, ph.file_range(), ph.p_vaddr);
+    let mut region = Region::readwrite_memory(ph.p_vaddr, ph.p_memsz);
 
     for (offset, byte) in header_bytes.iter().enumerate() {
-      let address = (ph.p_vaddr as usize) + (offset as usize);
-      memory.store_byte(address as u64, *byte as u64)?;
+      region.write(offset as u64, *byte).expect("write to memory region while loading binary");
     }
-  }
 
+    let permissions = Permissions::custom(ph.is_write(), ph.is_executable());
+
+    if permissions.is_executable() && permissions.is_writable() {
+      if allow_rx {
+        log::warn!("This program contains a memory region that's both writable and executable. Allowing due to --allow-rx flag.");
+      } else {
+        log::error!("This program contains a memory region that's both writable and executable. If you really want to run this binary anyway, add a --allow-rx flag.");
+        return Ok(());
+      }
+    }
+
+    let region = region.change_permissions(permissions);
+
+    memory.add_region(region);
+  }
+  
   log::debug!("Entry point is {:#016x}", binary.header.e_entry);
 
   match subsystem {

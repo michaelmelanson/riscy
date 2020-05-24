@@ -27,7 +27,7 @@ impl Memory {
   }
 
   fn find_region_mut(&mut self, address: u64) -> MemoryResult<&mut Region> {
-    for region in self.regions.iter_mut() {
+    for region in self.regions.iter_mut().rev() {
       if region.address_range().contains(&address) {
         return Ok(region);
       }
@@ -37,7 +37,7 @@ impl Memory {
   }
 
   fn find_region(&self, address: u64) -> MemoryResult<&Region> {
-    for region in self.regions.iter() {
+    for region in self.regions.iter().rev() {
       if region.address_range().contains(&address) {
         return Ok(region);
       }
