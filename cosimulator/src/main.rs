@@ -1,5 +1,5 @@
 use clap::{App, Arg};
-use log::{debug, info};
+use log::debug;
 use riscy_emulator::{
     machine::{RiscvMachine, RiscvMachineError, RiscvMachineStepAction},
     memory::{Memory, Region},
