@@ -4,6 +4,7 @@ use riscy_emulator::{
     subsystem::{Subsystem, SubsystemAction},
 };
 use riscy_isa::Register;
+use simple_logger::SimpleLogger;
 
 #[derive(Default)]
 struct TestRunnerSubsystem;
@@ -37,7 +38,7 @@ impl Subsystem for TestRunnerSubsystem {
 }
 
 pub fn run_test_suite(file: &[u8]) {
-    let _ = simple_logger::init();
+    let _ = SimpleLogger::from_env();
 
     let binary = goblin::elf::Elf::parse(file).expect("Could not parse file");
 
