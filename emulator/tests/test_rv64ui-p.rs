@@ -3,15 +3,15 @@ mod runner;
 use crate::runner::run_test_suite;
 
 macro_rules! deftest {
-  ($name: ident) => {
-    paste::item! {
-      #[test]
-      fn [<rv64ui_p_ $name>] () {
-        let file = include_bytes!(concat!("riscv-tests/isa/rv64ui-p-", stringify!($name)));
-        run_test_suite(file)
-      }
-    }
-  }
+    ($name: ident) => {
+        paste::item! {
+          #[test]
+          fn [<rv64ui_p_ $name>] () {
+            let file = include_bytes!(concat!("riscv-tests/isa/rv64ui-p-", stringify!($name)));
+            run_test_suite(file)
+          }
+        }
+    };
 }
 
 deftest!(add);
