@@ -1595,60 +1595,50 @@ impl Instruction {
                 rs2,
                 rs1,
                 opcode,
-            } => {
-                (encode_32bits(
-                    (((imm >> 5) & 0b1111111) << 25)
-                        | (rs2.encode() << 20)
-                        | (rs1.encode() << 15)
-                        | (opcode.funct3_field() << 12)
-                        | ((imm & 0b11111) << 7)
-                        | opcode.opcode_field(),
-                ))
-            }
+            } => encode_32bits(
+                (((imm >> 5) & 0b1111111) << 25)
+                    | (rs2.encode() << 20)
+                    | (rs1.encode() << 15)
+                    | (opcode.funct3_field() << 12)
+                    | ((imm & 0b11111) << 7)
+                    | opcode.opcode_field(),
+            ),
 
             Instruction::B {
                 imm,
                 rs2,
                 rs1,
                 opcode,
-            } => {
-                (encode_32bits(
-                    (((imm >> 20) & 0b1) << 31)
-                        | (((imm >> 5) & 0b111111) << 25)
-                        | (rs2.encode() << 20)
-                        | (rs1.encode() << 15)
-                        | (opcode.funct3_field() << 12)
-                        | (((imm >> 1) & 0b1111) << 8)
-                        | (((imm >> 11) & 0b1) << 7)
-                        | opcode.opcode_field(),
-                ))
-            }
+            } => encode_32bits(
+                (((imm >> 20) & 0b1) << 31)
+                    | (((imm >> 5) & 0b111111) << 25)
+                    | (rs2.encode() << 20)
+                    | (rs1.encode() << 15)
+                    | (opcode.funct3_field() << 12)
+                    | (((imm >> 1) & 0b1111) << 8)
+                    | (((imm >> 11) & 0b1) << 7)
+                    | opcode.opcode_field(),
+            ),
 
-            Instruction::U { imm, rd, opcode } => {
-                (encode_32bits(
-                    rd.encode() << 7 | opcode.opcode_field() | (imm & 0b11111111111111111111),
-                ))
-            }
+            Instruction::U { imm, rd, opcode } => encode_32bits(
+                rd.encode() << 7 | opcode.opcode_field() | (imm & 0b11111111111111111111),
+            ),
 
-            Instruction::J { imm, rd, opcode } => {
-                (encode_32bits(
-                    (((imm >> 20) & 0b1) << 31)
-                        | (((imm >> 1) & 0b1111111111) << 21)
-                        | (((imm >> 11) & 0b1) << 20)
-                        | (((imm >> 12) & 0b11111111) << 12)
-                        | (rd.encode() << 7)
-                        | opcode.opcode_field(),
-                ))
-            }
+            Instruction::J { imm, rd, opcode } => encode_32bits(
+                (((imm >> 20) & 0b1) << 31)
+                    | (((imm >> 1) & 0b1111111111) << 21)
+                    | (((imm >> 11) & 0b1) << 20)
+                    | (((imm >> 12) & 0b11111111) << 12)
+                    | (rd.encode() << 7)
+                    | opcode.opcode_field(),
+            ),
 
-            Instruction::CIW { opcode, rd, imm } => {
-                (encode_16bits(
-                    ((opcode.funct3_field() as u16) << 13)
-                        | (((*imm as u16 >> 2) & 0b11111111) << 5)
-                        | ((rd.encode_prime() as u16) << 2)
-                        | opcode.opcode_field() as u16,
-                ))
-            }
+            Instruction::CIW { opcode, rd, imm } => encode_16bits(
+                ((opcode.funct3_field() as u16) << 13)
+                    | (((*imm as u16 >> 2) & 0b11111111) << 5)
+                    | ((rd.encode_prime() as u16) << 2)
+                    | opcode.opcode_field() as u16,
+            ),
 
             Instruction::CNOP => encode_16bits(0x00000001),
 
@@ -1657,34 +1647,30 @@ impl Instruction {
                 rs1,
                 rs2,
                 imm,
-            } => {
-                (encode_16bits(
-                    ((opcode.funct3_field() as u16) << 13)
-                        | ((*imm >> 3 & 0b111) << 10)
-                        | (rs1.encode_prime() << 7)
-                        | ((*imm >> 2 & 0b1) << 6)
-                        | ((*imm >> 3 & 0b1) << 5)
-                        | (rs2.encode_prime() << 2)
-                        | (opcode.opcode_field() as u16),
-                ))
-            }
+            } => encode_16bits(
+                ((opcode.funct3_field() as u16) << 13)
+                    | ((*imm >> 3 & 0b111) << 10)
+                    | (rs1.encode_prime() << 7)
+                    | ((*imm >> 2 & 0b1) << 6)
+                    | ((*imm >> 3 & 0b1) << 5)
+                    | (rs2.encode_prime() << 2)
+                    | (opcode.opcode_field() as u16),
+            ),
 
             Instruction::CL {
                 opcode,
                 rs1,
                 rd,
                 imm,
-            } => {
-                (encode_16bits(
-                    ((opcode.funct3_field() as u16) << 13)
-                        | ((*imm >> 3 & 0b111) << 10)
-                        | (rs1.encode_prime() << 7)
-                        | ((*imm >> 2 & 0b1) << 6)
-                        | ((*imm >> 3 & 0b1) << 5)
-                        | (rd.encode_prime() << 2)
-                        | (opcode.opcode_field() as u16),
-                ))
-            }
+            } => encode_16bits(
+                ((opcode.funct3_field() as u16) << 13)
+                    | ((*imm >> 3 & 0b111) << 10)
+                    | (rs1.encode_prime() << 7)
+                    | ((*imm >> 2 & 0b1) << 6)
+                    | ((*imm >> 3 & 0b1) << 5)
+                    | (rd.encode_prime() << 2)
+                    | (opcode.opcode_field() as u16),
+            ),
 
             Instruction::CI { opcode, imm, rd } => encode_16bits(
                 ((opcode.funct3_field() as u16) << 13)
