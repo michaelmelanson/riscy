@@ -10,10 +10,18 @@ use riscy_isa::{
 };
 use std::{collections::HashMap, marker::PhantomData};
 
-#[derive(Debug)]
 pub enum TrapCause {
     MemoryError(MemoryError),
     InvalidInstruction(u64),
+}
+
+impl std::fmt::Debug for TrapCause {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TrapCause::MemoryError(error) => write!(f, "MemoryError({:?})", error),
+            TrapCause::InvalidInstruction(address) => write!(f, "InvalidInstruction({:#X?})", address),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -105,7 +113,7 @@ impl<S: Subsystem> RiscvMachine<S> {
 
     fn execute_instruction(&mut self, instruction: Instruction) -> RiscvMachineStepResult {
         let pc = self.state().pc;
-        log::trace!("{:#016x}: Executing {:?}", pc, instruction);
+        log::info!("{:#016x}: Executing {:?}", pc, instruction);
 
         self.memory.ensure_executable(pc)?;
 
