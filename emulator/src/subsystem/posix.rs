@@ -72,10 +72,12 @@ impl Subsystem for Posix {
                 Ok(None)
             }
 
+            // exit
             93 => Ok(Some(SubsystemAction::Exit {
                 status_code: registers.get(Register::A0),
             })),
 
+            // program break
             214 => {
                 let program_break = registers.get(Register::A0);
                 let prior_program_break = machine.state().program_break;
