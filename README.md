@@ -13,7 +13,7 @@ You can run the emulator using `cargo` and give it a file to run:
 cargo run --bin riscy-emulator -- path/to/binary
 ```
 
-The binary must be a RISC-V executable in ELF format. Binaries produced by [Selfie](https://github.com/cksystemsteaching/selfie) should work, as long as they are very simple. There is one subsystem supported which supplies a very limited set of POSIX-compliant system calls. Curretly only a couple system calls are supported: 
+The binary must be a RISC-V executable in ELF format. Binaries produced by [Selfie](https://github.com/cksystemsteaching/selfie) should work, as long as they are very simple. There is one subsystem supported which supplies a very limited set of POSIX-compliant system calls. Currently only a couple system calls are supported: 
 
 |#   | System call | Current support |
 |--|--|--|
