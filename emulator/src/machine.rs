@@ -13,7 +13,7 @@ use std::{collections::HashMap, marker::PhantomData};
 #[derive(Debug)]
 pub enum TrapCause {
     MemoryError(MemoryError),
-    InvalidInstruction,
+    InvalidInstruction(u64),
 }
 
 #[derive(Debug)]
@@ -99,7 +99,7 @@ impl<S: Subsystem> RiscvMachine<S> {
             self.execute_instruction(instruction)
         } else {
             self.halt();
-            Err(RiscvMachineError::Trap(TrapCause::InvalidInstruction))
+            Err(RiscvMachineError::Trap(TrapCause::InvalidInstruction(pc)))
         }
     }
 
@@ -600,7 +600,7 @@ impl<S: Subsystem> RiscvMachine<S> {
                     }
                     .map_err(|e| RiscvMachineError::Trap(TrapCause::MemoryError(e)))?;
 
-                    log::debug!("{:#016x}: {:?} loaded {:#016x} ({}) from {:#016x} + {:#016x} ({}) = {:#016x}", pc, opcode, value, value as i64, base, offset, offset, address);
+                    log::debug!("{:#016x}: {:?} loaded {:#016x} ({}) from {:#016x} ({:?}) + {:#016x} ({}) = {:#016x}", pc, opcode, value, value as i64, base, rs1, offset, offset, address);
 
                     self.state_mut().registers.set(rd, value);
                 }
@@ -1002,7 +1002,10 @@ impl RiscvRegisters {
         if register == Register::Zero {
             return 0;
         }
-        *self.0.get(&register).unwrap_or(&0)
+        let value = *self.0.get(&register).unwrap_or(&0);
+        log::debug!("Register {:?} has value {:#016X}", register, value);
+
+        value
     }
 
     pub fn set(&mut self, register: Register, value: u64) {
@@ -1011,6 +1014,7 @@ impl RiscvRegisters {
         }
 
         self.0.insert(register, value);
+        log::debug!("Register {:?} set to {:#016X}", register, value);
     }
 }
 
