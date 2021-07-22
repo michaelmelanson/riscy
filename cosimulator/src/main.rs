@@ -143,6 +143,9 @@ impl RiscySimulator {
         // what does spike do here?
         memory.add_region(Region::readwrite_memory(0x2000, memory_size));
 
+        // Stack
+        memory.add_region(Region::readwrite_memory(0x80002ED8, 0x10000));
+
         let machine = RiscvMachine::<Posix>::new(memory, 0x1000);
 
         RiscySimulator { machine }
