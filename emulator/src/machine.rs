@@ -977,6 +977,7 @@ impl<S: Subsystem> RiscvMachine<S> {
 pub struct RiscvMachineContext {
     pub registers: RiscvRegisters,
     pub pc: u64,
+    // Note: Not actually enforced.
     pub program_break: u64,
     pub csr: CSR,
 }
