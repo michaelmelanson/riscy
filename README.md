@@ -21,7 +21,7 @@ The binary must be a RISC-V executable in ELF format. Binaries produced by [Self
 |64  | write | Prints the buffer as a string to standard output (regardless of which file descriptor is given). |
 |80  | fstat | If file descriptor 1 (standard output) is requested, then it returns a refcount of 0. Other descriptors are not supported. |
 |93  | exit  | Terminates with a status code. |
-|214 | program break | No effect. |
+|214 | program break | Supports updating the program break and returning the current program break, as documented in the `brk` man page. However, the program break is not actually used for memory protection. |
 
 Any other system calls will fail with an "unknown system call" error.
 
