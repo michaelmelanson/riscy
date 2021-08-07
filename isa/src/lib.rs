@@ -1917,11 +1917,16 @@ pub fn test_stream_decoding_add() {
 }
 
 #[test]
-pub fn test_instruction_decoding() {
-    fn decode_test(bytes: &[u8], expected: Instruction) {
+pub fn test_instruction_encoding() {
+    fn encoding_test(bytes: &[u8], instruction: Instruction) {
         let mut stream = DecodingStream::new(bytes);
         let actual = stream.next().unwrap();
-        assert_eq!(actual, expected);
+        assert_eq!(actual, instruction);
+
+        let mut stream = EncodingStream::new();
+        stream.push(instruction);
+        let actual = stream.bytes();
+        assert_eq!(actual, bytes);
     }
 
     /*
@@ -2021,7 +2026,7 @@ pub fn test_instruction_decoding() {
       103, 128, 0, 0,   // jalr zero,0(ra)
     */
 
-    decode_test(
+    encoding_test(
         &[183, 2, 1, 0],
         Instruction::U {
             opcode: Opcode::Lui,
@@ -2029,7 +2034,7 @@ pub fn test_instruction_decoding() {
             rd: Register::T0,
         },
     );
-    decode_test(
+    encoding_test(
         &[147, 130, 2, 24],
         Instruction::I {
             opcode: Opcode::OpImm(OpImmFunction::ADDI),
@@ -2038,7 +2043,7 @@ pub fn test_instruction_decoding() {
             imm: 384,
         },
     );
-    decode_test(
+    encoding_test(
         &[19, 5, 0, 0],
         Instruction::I {
             opcode: Opcode::OpImm(OpImmFunction::ADDI),
@@ -2047,7 +2052,7 @@ pub fn test_instruction_decoding() {
             imm: 0,
         },
     );
-    decode_test(
+    encoding_test(
         &[147, 8, 96, 13],
         Instruction::I {
             opcode: Opcode::OpImm(OpImmFunction::ADDI),
@@ -2056,7 +2061,7 @@ pub fn test_instruction_decoding() {
             imm: 214,
         },
     );
-    decode_test(
+    encoding_test(
         &[0x93, 0x87, 0xe0, 0xFC],
         Instruction::I {
             opcode: Opcode::OpImm(OpImmFunction::ADDI),
@@ -2065,7 +2070,7 @@ pub fn test_instruction_decoding() {
             imm: -50,
         },
     );
-    decode_test(
+    encoding_test(
         &[115, 0, 0, 0],
         Instruction::IS {
             opcode: Opcode::System(SystemFunction::Environment(EnvironmentFunction::ECALL)),
@@ -2074,7 +2079,7 @@ pub fn test_instruction_decoding() {
             imm: 0,
         },
     );
-    decode_test(
+    encoding_test(
         &[239, 0, 64, 15],
         Instruction::J {
             opcode: Opcode::JAl,
@@ -2082,7 +2087,7 @@ pub fn test_instruction_decoding() {
             imm: 244,
         },
     );
-    decode_test(
+    encoding_test(
         &[0x6f, 0x00, 0x80, 0x04],
         Instruction::J {
             opcode: Opcode::JAl,
@@ -2090,7 +2095,7 @@ pub fn test_instruction_decoding() {
             imm: 72,
         },
     );
-    decode_test(
+    encoding_test(
         &[0x6f, 0x10, 0xf0, 0x67],
         Instruction::J {
             opcode: Opcode::JAl,
@@ -2098,17 +2103,8 @@ pub fn test_instruction_decoding() {
             imm: 7806,
         },
     );
-    // decode_test(
-    //     &[0xEF, 0x00, 0x40, 0x0F],
-    //     Instruction::J {
-    //         opcode: Opcode::JAl,
-    //         rd: Register::ReturnAddress,
-    //         imm: 61, // 0xeba,
-    //     },
-    // );
-    
-    decode_test(
-        &0x946ff0efu64.to_le_bytes(),
+    encoding_test(
+        &0x946ff0efu32.to_le_bytes(),
         Instruction::J {
             opcode: Opcode::JAl,
             rd: Register::ReturnAddress,
@@ -2116,11 +2112,11 @@ pub fn test_instruction_decoding() {
         },
     );
 
-    decode_test(
+    encoding_test(
         &[99, 4, 101, 0],
         Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8},
     );
-    decode_test(
+    encoding_test(
         &[0x83, 0x21, 0x72, 0x03],
         Instruction::I {
             opcode: Opcode::Load(LoadWidth::Word),
@@ -2129,7 +2125,7 @@ pub fn test_instruction_decoding() {
             rd: Register::GlobalPointer,
         },
     );
-    decode_test(
+    encoding_test(
         &[35, 48, 81, 0],
         Instruction::S {
             opcode: Opcode::Store(StoreWidth::DoubleWord),
@@ -2138,7 +2134,7 @@ pub fn test_instruction_decoding() {
             imm: 0,
         },
     );
-    decode_test(
+    encoding_test(
         &[179, 130, 98, 64],
         Instruction::R {
             opcode: Opcode::Op(OpFunction::SUB),
