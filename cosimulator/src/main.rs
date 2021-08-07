@@ -7,11 +7,7 @@ use riscy_emulator::{
     subsystem::Posix,
 };
 use riscy_isa::Register;
-use std::{
-    io::{Read, Write},
-    process::{Command, Stdio},
-    thread::JoinHandle,
-};
+use std::{io::{Read, Write}, process::{Command, Stdio}, thread::JoinHandle};
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 
@@ -67,6 +63,7 @@ pub fn main() -> Result<(), RiscvMachineError> {
     let mut cosimulator = Cosimulator::new(riscy_sim, spike_sim);
     cosimulator
         .run(&[
+            0x00000000001018,
     // 0x0000008000a000,
     // 0x0000008000a008,
     // 0x00000000001000 + 8*0,
@@ -91,9 +88,15 @@ struct SimulatorState {
     halted: bool,
 }
 
+#[derive(Debug)]
+enum StepResult {
+    Instruction(String),
+    Exit(u64)
+}
+
 trait Simulator {
     fn state(&mut self, memory: &[u64]) -> SimulatorState;
-    fn step(&mut self);
+    fn step(&mut self) -> StepResult;
 }
 
 struct RiscySimulator {
@@ -184,12 +187,15 @@ impl Simulator for RiscySimulator {
         }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> StepResult {
         match self.machine.step().expect("step failed") {
-            RiscvMachineStepAction::ExecutedInstruction { instruction: _ } => {}
+            RiscvMachineStepAction::ExecutedInstruction { instruction } => {
+                StepResult::Instruction(format!("{:?}", instruction))
+            }
             RiscvMachineStepAction::Exit { status_code } => {
                 log::info!("Exited with code {}", status_code);
-                self.machine.halt()
+                self.machine.halt();
+                StepResult::Exit(status_code)
             }
         }
     }
@@ -323,9 +329,10 @@ impl Simulator for SpikeSimulator {
         }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> StepResult {
         let response = self.send_command("");
         log::info!("Spike> {}", response);
+        StepResult::Instruction(response)
     }
 }
 
@@ -343,12 +350,37 @@ impl<Experiment: Simulator, Control: Simulator> Cosimulator<Experiment, Control>
     }
 
     fn run(&mut self, important_memory: &[u64]) -> Result<(), ()> {
+        let mut experiment_last_result = None;
+        let mut control_last_result = None;
+        
         loop {
             let experiment_state = self.experiment.state(important_memory);
             let control_state = self.control.state(important_memory);
 
             if experiment_state != control_state {
-                log::error!("Simulators out of sync:\nExperiment (Riscy): {:016X?}\nControl (spike): {:016X?}", experiment_state, control_state);
+                log::error!("Simulators out of sync:");
+
+                println!("Experiment last result: {:?}", experiment_last_result);
+                println!("   Control last result: {:?}", control_last_result);
+
+                println!("  Experiment(riscy)                     Control(spike)");
+
+                if experiment_state.pc != control_state.pc {
+                    println!("  {:>14} = {:016X}     {:>14} = {:016X}", 
+                        "ProgramCounter", experiment_state.pc,
+                        "ProgramCounter", control_state.pc,
+                    );
+                }
+
+                for (experiment, control) in experiment_state.registers.iter().zip(&control_state.registers) {
+                    if experiment == control { continue; }
+
+                    println!("  {:>14} = {:016X}     {:>14} = {:016X}", 
+                        format!("{:?}", experiment.0), experiment.1, 
+                        format!("{:?}", control.0), control.1
+                    );
+                }
+
                 return Err(());
             }
 
@@ -356,8 +388,8 @@ impl<Experiment: Simulator, Control: Simulator> Cosimulator<Experiment, Control>
                 break;
             }
 
-            self.experiment.step();
-            self.control.step();
+            experiment_last_result = Some(self.experiment.step());
+            control_last_result = Some(self.control.step());
         }
 
         Ok(())

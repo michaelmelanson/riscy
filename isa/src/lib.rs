@@ -1390,17 +1390,19 @@ impl Instruction {
             }
 
             Opcode::JAl => {
-                let imm20 = ((encoded >> 31) & 0b1) << 20;
-                let imm10_1 = ((encoded >> 21) & 0b11111111111) << 1;
-                let imm11 = ((encoded >> 20) & 0b1) << 11;
+                let imm20    = ((encoded >> 31) & 0b1) << 20;
                 let imm19_12 = ((encoded >> 12) & 0b11111111) << 12;
+                let imm11    = ((encoded >> 20) & 0b1) << 11;
+                let imm10_1  = ((encoded >> 21) & 0b1111111111) << 1;
 
-                let sign_bit = imm20 != 0;
-                let imm = (if sign_bit { (-1i32 as u32) << 21 } else { 0 })
+                let sign_bit = (encoded >> 31) != 0;
+                let sign_extension = if sign_bit { (-1i32 as u32) << 21 } else { 0 };
+
+                let imm = sign_extension
                     | imm20
-                    | imm10_1
+                    | imm19_12
                     | imm11
-                    | imm19_12;
+                    | imm10_1;
 
                 let rd = (encoded >> 7) & 0b11111;
                 Instruction::J {
@@ -2096,6 +2098,24 @@ pub fn test_instruction_decoding() {
             imm: 7806,
         },
     );
+    // decode_test(
+    //     &[0xEF, 0x00, 0x40, 0x0F],
+    //     Instruction::J {
+    //         opcode: Opcode::JAl,
+    //         rd: Register::ReturnAddress,
+    //         imm: 61, // 0xeba,
+    //     },
+    // );
+    
+    decode_test(
+        &0x946ff0efu64.to_le_bytes(),
+        Instruction::J {
+            opcode: Opcode::JAl,
+            rd: Register::ReturnAddress,
+            imm: -0xeba, // 0xeba,
+        },
+    );
+
     decode_test(
         &[99, 4, 101, 0],
         Instruction::B { opcode: Opcode::Branch(BranchOperation::Equal), rs1: Register::A0, rs2: Register::T1, imm: /*2?*/ 8},
