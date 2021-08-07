@@ -96,7 +96,7 @@ impl<S: Subsystem> RiscvMachine<S> {
 
     pub fn step(&mut self) -> RiscvMachineStepResult {
         let pc = self.state().pc;
-        log::debug!("Executing at {:#016x}", pc);
+        log::trace!("Executing at {:#016x}", pc);
         let mut stream = DecodingStream::new(
             self.memory
                 .slice(pc)
@@ -113,7 +113,7 @@ impl<S: Subsystem> RiscvMachine<S> {
 
     fn execute_instruction(&mut self, instruction: Instruction) -> RiscvMachineStepResult {
         let pc = self.state().pc;
-        log::info!("{:#016x}: Executing {:?}", pc, instruction);
+        log::debug!("{:#016x}: Executing {:?}", pc, instruction);
 
         self.memory.ensure_executable(pc)?;
 

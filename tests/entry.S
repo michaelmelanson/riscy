@@ -68,7 +68,9 @@ handle_reset:
   slli t0, t0, 12
   add sp, sp, t0
   csrw mscratch, sp
-  j main
+  jal main
+
+  j terminate
 
   .globl  pop_tf
 pop_tf:
@@ -166,6 +168,8 @@ wtf:
   j terminate
 
 terminate:
+  addi  a7, x0, 93
+  ecall
   j terminate
 
 trap_vector:
@@ -173,6 +177,9 @@ trap_vector:
 
 puts:
   addi  a7, x0, 64
+  addi  a2, x0, 12 # HACK: hello world! = 12 characters
+  addi  a1, a0, 0
+  addi  a0, x0, 0
   ecall
   ret
 .globl puts

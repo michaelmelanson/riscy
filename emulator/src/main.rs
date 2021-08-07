@@ -1,5 +1,6 @@
 use clap::{App, Arg};
 use riscy_emulator::machine::{RiscvMachine, RiscvMachineError, RiscvMachineStepAction};
+use riscy_emulator::roms::ResetVecRom;
 use riscy_emulator::{
     memory::{Memory, Permissions, Region},
     subsystem::{Posix, Subsystem},
@@ -108,12 +109,13 @@ fn main() -> Result<(), RiscvMachineError> {
         let region = region.change_permissions(permissions);
 
         memory.add_region(region);
+
+        memory.add_region(ResetVecRom::new(binary.entry).into());
+        memory.add_region(Region::readwrite_memory(0x80002ED8, 0x10000));
     }
 
-    log::debug!("Entry point is {:#016x}", binary.header.e_entry);
-
     match subsystem {
-        "posix" => run_machine::<Posix>(memory, binary.header.e_entry),
+        "posix" => run_machine::<Posix>(memory, 0x1000),
 
         _ => panic!("Unknown subsystem {}", subsystem),
     }
