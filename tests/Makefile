@@ -11,8 +11,13 @@ selfie.c:
 selfie: selfie.c
 	cc -Wall -Wextra -O3 -m64 -Duint64_t='unsigned long long' selfie.c -o selfie
 
-%.m: %.c link.ld defines.h entry.S Makefile
-	/opt/riscv/bin/riscv64-unknown-elf-gcc -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -std=gnu99 -O2 -T link.ld entry.S $< -o $@
+%.s: %.c selfie Makefile
+	./selfie -c $< -S $@
 
-%.s: %.m
-	/opt/riscv/bin/riscv64-unknown-elf-objdump -d $< > $@
+# %.m: %.c link.ld defines.h entry.S Makefile
+#	/opt/riscv/bin/riscv64-unknown-elf-gcc -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -std=gnu99 -O2 -T link.ld entry.S $< -o $@
+
+%.m: %.c selfie Makefile
+	./selfie -c $< -o $@
+
+#	/opt/riscv/bin/riscv64-unknown-elf-objdump -d $< > $@
