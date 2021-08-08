@@ -7,6 +7,7 @@ version = "0.1.0"
 authors = ["Michael Melanson <michael@michaelmelanson.net>"]
 edition = "2018"
 keywords = ["risc-v", "riscv"]
+categories = ["emulators", "encoding"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
