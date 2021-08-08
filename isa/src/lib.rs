@@ -50,7 +50,7 @@ pub fn test_instruction_encoding() {
         assert_eq!(actual, instruction);
 
         let mut stream = EncodingStream::new();
-        stream.push(instruction);
+        stream.push(&instruction);
         let actual = stream.bytes();
         assert_eq!(actual, bytes);
     }
@@ -280,7 +280,7 @@ pub fn test_instruction_roundtrip() {
         let instruction = stream.next().unwrap();
 
         let mut stream = EncodingStream::new();
-        stream.push(instruction);
+        stream.push(&instruction);
 
         let output = stream.bytes();
         assert_eq!(output, input);

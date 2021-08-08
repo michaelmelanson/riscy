@@ -3,11 +3,31 @@ use std::io::Cursor;
 
 use crate::Instruction;
 
+/// Converts a block of bytes into a stream of RISC-V instructions represented by [Instruction] structs.
+///
+/// # Example
+///
+/// ```
+/// use riscy_isa::{Opcode, DecodingStream, Instruction, Register, OpImmFunction};
+/// let bytes: [u8; 4] = [19, 5, 0, 0];
+/// let mut stream = DecodingStream::new(&bytes);
+///
+/// // Decodes to an `addi a0, x0, 0` instruction
+/// assert_eq!(stream.next(), Some(Instruction::I {
+///     opcode: Opcode::OpImm(OpImmFunction::ADDI),
+///     rd: Register::A0,
+///     rs1: Register::Zero,
+///     imm: 0,
+/// }));
+///
+/// assert_eq!(stream.next(), None);
+/// ```
 pub struct DecodingStream<'a> {
     cursor: Cursor<&'a [u8]>,
 }
 
 impl<'a> DecodingStream<'a> {
+    /// Constructs a [DecodingStream] from a block of bytes.
     pub fn new(bytes: &'a [u8]) -> DecodingStream {
         DecodingStream {
             cursor: Cursor::new(bytes),

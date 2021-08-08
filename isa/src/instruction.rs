@@ -1,8 +1,14 @@
 use crate::{AmoOrdering, Opcode, Register};
 
+/// A single RISC-V instruction. Each enum variant here is a different
+/// instruction format, which have their different parameters.
+///
+/// # Resources
+/// * [RISC-V specification v2.2](https://riscv.org/wp-content/uploads/2017/05/riscv-spec-v2.2.pdf)
+///
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Instruction {
-    // Base instruction set
+    /// R-type instructions
     R {
         opcode: Opcode,
         rd: Register,
