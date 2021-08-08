@@ -7,7 +7,11 @@ use riscy_emulator::{
     subsystem::Posix,
 };
 use riscy_isa::Register;
-use std::{io::{Read, Write}, process::{Command, Stdio}, thread::JoinHandle};
+use std::{
+    io::{Read, Write},
+    process::{Command, Stdio},
+    thread::JoinHandle,
+};
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 
@@ -64,17 +68,17 @@ pub fn main() -> Result<(), RiscvMachineError> {
     cosimulator
         .run(&[
             0x00000000001018,
-    // 0x0000008000a000,
-    // 0x0000008000a008,
-    // 0x00000000001000 + 8*0,
-    // 0x00000000001000 + 8*1,
-    // 0x00000000001000 + 8*2,
-    // 0x00000000001000 + 8*3,
-    // 0x00000000001000 + 8*4,
-    // 0x00000000001000 + 8*5,
-    // 0x00000000001000 + 8*6,
-    // 0x00000000001000 + 8*7
-  ])
+            // 0x0000008000a000,
+            // 0x0000008000a008,
+            // 0x00000000001000 + 8*0,
+            // 0x00000000001000 + 8*1,
+            // 0x00000000001000 + 8*2,
+            // 0x00000000001000 + 8*3,
+            // 0x00000000001000 + 8*4,
+            // 0x00000000001000 + 8*5,
+            // 0x00000000001000 + 8*6,
+            // 0x00000000001000 + 8*7
+        ])
         .expect("cosimulation failed");
 
     Ok(())
@@ -91,7 +95,7 @@ struct SimulatorState {
 #[derive(Debug)]
 enum StepResult {
     Instruction(String),
-    Exit(u64)
+    Exit(u64),
 }
 
 trait Simulator {
@@ -352,7 +356,7 @@ impl<Experiment: Simulator, Control: Simulator> Cosimulator<Experiment, Control>
     fn run(&mut self, important_memory: &[u64]) -> Result<(), ()> {
         let mut experiment_last_result = None;
         let mut control_last_result = None;
-        
+
         loop {
             let experiment_state = self.experiment.state(important_memory);
             let control_state = self.control.state(important_memory);
@@ -366,18 +370,27 @@ impl<Experiment: Simulator, Control: Simulator> Cosimulator<Experiment, Control>
                 println!("  Experiment(riscy)                     Control(spike)");
 
                 if experiment_state.pc != control_state.pc {
-                    println!("  {:>14} = {:016X}     {:>14} = {:016X}", 
-                        "ProgramCounter", experiment_state.pc,
-                        "ProgramCounter", control_state.pc,
+                    println!(
+                        "  {:>14} = {:016X}     {:>14} = {:016X}",
+                        "ProgramCounter", experiment_state.pc, "ProgramCounter", control_state.pc,
                     );
                 }
 
-                for (experiment, control) in experiment_state.registers.iter().zip(&control_state.registers) {
-                    if experiment == control { continue; }
+                for (experiment, control) in experiment_state
+                    .registers
+                    .iter()
+                    .zip(&control_state.registers)
+                {
+                    if experiment == control {
+                        continue;
+                    }
 
-                    println!("  {:>14} = {:016X}     {:>14} = {:016X}", 
-                        format!("{:?}", experiment.0), experiment.1, 
-                        format!("{:?}", control.0), control.1
+                    println!(
+                        "  {:>14} = {:016X}     {:>14} = {:016X}",
+                        format!("{:?}", experiment.0),
+                        experiment.1,
+                        format!("{:?}", control.0),
+                        control.1
                     );
                 }
 

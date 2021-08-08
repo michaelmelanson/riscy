@@ -19,7 +19,9 @@ impl std::fmt::Debug for TrapCause {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TrapCause::MemoryError(error) => write!(f, "MemoryError({:?})", error),
-            TrapCause::InvalidInstruction(address) => write!(f, "InvalidInstruction({:#X?})", address),
+            TrapCause::InvalidInstruction(address) => {
+                write!(f, "InvalidInstruction({:#X?})", address)
+            }
         }
     }
 }
