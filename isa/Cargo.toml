@@ -1,5 +1,8 @@
 [package]
 name = "riscy-isa"
+description = "Encodes and decodes streams of RISC-V instructions."
+license = "MIT"
+repository = "https://github.com/michaelmelanson/riscy"
 version = "0.1.0"
 authors = ["Michael Melanson <michael@michaelmelanson.net>"]
 edition = "2018"
