@@ -20,6 +20,8 @@ use crate::Instruction;
 ///     imm: 0,
 /// }));
 ///
+/// // There's only one instruction in the byte array so any further calls to
+/// // `next` return `None`.
 /// assert_eq!(stream.next(), None);
 /// ```
 pub struct DecodingStream<'a> {
