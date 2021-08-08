@@ -2,7 +2,7 @@
 all: add.s add.m fib.s fib.m print.s print.m
 clean:
 	rm selfie selfie.c
-	rm add.s add.m fib.s fib.m
+	rm add.s add.m fib.s fib.m print.s print.m
 .PHONY: all clean
 
 selfie.c: 
